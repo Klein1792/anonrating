@@ -1,4 +1,6 @@
 # DB configuration
+db_connect.php
+phpconfig.php
 
 # Log files
 *.log
@@ -9,10 +11,5 @@ tmp/
 
 # Editor files
 .vscode/
-.idea/
 mobile-controller.js
-mobile-controller.php
-token.txt
-cacert.pem
-api_check.php
-igdb_token.json
+.idea/
