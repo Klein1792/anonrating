@@ -1,0 +1,192 @@
+/* Game cards (index.php) */
+.new-games-container { 
+    margin: 20px 0; 
+}
+
+.new-games-grid { 
+    display: grid;  /* Change from flex to grid */
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); /* Desktop sizing */
+    gap: 20px; 
+    justify-content: center; 
+}
+
+.new-game {
+    width: 100%; /* Change from fixed width to 100% to fit grid cell */
+    height: 350px;
+    border: 2px solid #ff00ff;
+    background: #111;
+    padding: 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.new-game a { 
+    text-decoration: none; 
+}
+
+.new-game-image {
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+    border: 2px solid #00ff00;
+}
+
+.new-game img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+}
+
+.new-game h3 {
+    color: #00ff00;
+    text-shadow: 1px 1px #ff00ff;
+    margin: 10px 0;
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.new-game p {
+    color: #ff00ff;
+    margin: 5px 0;
+    font-size: 14px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.new-game .release-label { 
+    color: #00ffff; 
+}
+
+.new-game .rating-label { 
+    color: #ffff00; 
+}
+
+.new-game .likes-label { 
+    color: #ff8000; 
+}
+
+.new-game .likes-content { 
+    color: #ff00ff; 
+}
+
+/* Single Game Page */
+.game-detail-container {
+    display: flex;
+    flex-direction: column;
+    max-width: 900px;
+    margin: 0 auto;
+    background-color: rgba(34, 34, 34, 0.5);
+    border: 1px solid #333;
+    border-radius: 5px;
+    padding: 20px;
+}
+
+.game-header {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.game-cover {
+    flex: 0 0 200px;
+    margin-right: 20px;
+}
+
+.game-cover img {
+    width: 100%;
+    border-radius: 5px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.game-info {
+    flex: 1;
+}
+
+.game-title {
+    margin-top: 0;
+    font-size: 24px;
+    color: #00ff00;
+    text-shadow: 2px 2px 4px rgba(0, 255, 0, 0.5);
+}
+
+.game-meta {
+    margin-bottom: 15px;
+}
+
+.game-meta p {
+    margin: 5px 0;
+    color: #ccc;
+}
+
+.game-meta strong {
+    color: #00ffff;
+}
+
+/* Responsive game cards - UPDATE THIS SECTION */
+@media (max-width: 768px) {
+    .new-games-grid {
+        grid-template-columns: repeat(2, 1fr); /* EXACTLY 2 columns on mobile */
+        gap: 10px; /* Smaller gap on mobile */
+        padding: 0 5px; /* Add side padding */
+    }
+    
+    .new-game {
+        height: auto; /* Allow height to adapt to content */
+        min-height: 280px; /* Minimum height */
+    }
+    
+    .new-game-image {
+        height: 220px; /* Taller images for vertical rectangle ratio */
+        width: 100%;
+        border-width: 1px; /* Thinner border to maximize image area */
+    }
+    
+    .new-game h3 {
+        font-size: 14px; /* Smaller title text */
+        margin: 5px 0; /* Less margin */
+    }
+    
+    .new-game p {
+        font-size: 12px; /* Smaller description text */
+        margin: 3px 0; /* Less margin */
+        -webkit-line-clamp: 1; /* Only show 1 line of description on mobile */
+    }
+    
+    /* Game detail page adjustments */
+    .game-header {
+        flex-direction: column;
+    }
+    
+    .game-cover {
+        margin-right: 0;
+        margin-bottom: 15px;
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 200px;
+    }
+}
+
+/* Extra small devices */
+@media (max-width: 380px) {
+    .new-games-grid {
+        grid-template-columns: repeat(2, 1fr); /* Still 2 columns, even on very small screens */
+    }
+    
+    .new-game-image {
+        height: 160px; /* Still tall but adjusted for smaller screens */
+    }
+    
+    .new-game h3 {
+        font-size: 12px;
+    }
+}

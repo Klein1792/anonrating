@@ -1,0 +1,17 @@
+[
+    {
+        "gameName": "SUPER MARIO ODYSSEY",
+        "reviewText": "AMAZING PLATFORMER 10/10",
+        "votes": 5
+    },
+    {
+        "gameName": "ZELDA: TEARS OF THE KINGDOM",
+        "reviewText": "BEST OPEN WORLD GAME",
+        "votes": 3
+    },
+    {
+        "gameName": "TEST GAME",
+        "reviewText": "THIS IS A TEST REVIEW",
+        "votes": 0
+    }
+]

@@ -1,0 +1,94 @@
+/* Clean up the duplicate media queries and fix mobile spacing */
+@media (max-width: 768px) {
+    body {
+        padding-top: 100px; /* Increased for mobile header height */
+        font-size: 14px;
+        padding-bottom: 0; /* Remove bottom padding - add as needed */
+    }
+    
+    body:not(.user-logged-in) {
+        padding-bottom: 50px; /* Space for mobile konami at bottom */
+    }
+    
+    /* Mobile controller */
+    #mobile-controller.mobile-controller {
+        display: flex !important;
+    }
+    
+    body.controller-visible {
+        padding-bottom: 180px;
+    }
+    
+    /* Header styles */
+    .header-container { 
+        padding: 10px 5px; 
+    }
+    
+    /* Form elements */
+    form { 
+        width: 100%; 
+        padding: 10px; 
+    }
+    
+    input[type="text"], 
+    input[type="password"], 
+    textarea, 
+    select, 
+    button {
+        font-size: 16px;
+        padding: 12px;
+        margin: 5px 0;
+    }
+    
+    /* Make buttons more tappable */
+    button, .btn { 
+        min-height: 44px; 
+        padding: 12px 20px; 
+        margin: 10px 0; 
+        touch-action: manipulation; 
+    }
+    
+    /* Table overflow */
+    table { 
+        display: block; 
+        overflow-x: auto; 
+    }
+    
+    th, td { 
+        min-width: 100px; 
+    }
+    
+    /* Fix container spacing for mobile */
+    .container.mt-3 {
+        margin-top: 0 !important;
+    }
+    
+    /* Search and sort fields */
+    #search-input, 
+    #sort-select {
+        margin-bottom: 10px;
+    }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+    body {
+        padding-top: 90px; /* Slightly less for very small screens */
+    }
+    
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.3rem; }
+    h3 { font-size: 1.1rem; }
+    
+    input, select, button { 
+        font-size: 16px; 
+        padding: 14px 10px; 
+    }
+}
+
+/* iPhone 12 Pro specific fix */
+@media (max-width: 390px) {
+    body {
+        padding-top: 100px; /* Extra padding for iPhone 12 Pro */
+    }
+}

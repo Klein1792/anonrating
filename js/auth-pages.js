@@ -1,0 +1,314 @@
+/**
+ * Authentication Challenges
+ * Handles Konami code and arrow challenge sequences for login/register pages
+ */
+(function() {
+    // Set up global namespace
+    window.gameRating = window.gameRating || {};
+    window.gameRating.auth = {};
+    
+    // Utility functions
+    window.gameRating.utils = {
+        showNotification: function(message) {
+            const notification = document.getElementById('custom-notification');
+            const messageElement = document.getElementById('notification-message');
+            if (notification && messageElement) {
+                messageElement.textContent = message;
+                notification.style.display = 'block';
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 3000);
+            } else {
+                alert(message);
+            }
+        },
+        
+        isBotDetected: function(pressTimes, sequenceLength) {
+            if (pressTimes.length < sequenceLength) return false;
+
+            const timeDiffs = [];
+            for (let i = 1; i < pressTimes.length; i++) {
+                timeDiffs.push(pressTimes[i] - pressTimes[i - 1]);
+            }
+
+            const avgTimeDiff = timeDiffs.reduce((sum, diff) => sum + diff, 0) / timeDiffs.length;
+            const variance = timeDiffs.reduce((sum, diff) => sum + Math.pow(diff - avgTimeDiff, 2), 0) / timeDiffs.length;
+            const stdDev = Math.sqrt(variance);
+
+            return avgTimeDiff < 30 || stdDev < 10;
+        }
+    };
+    
+    // Constants
+    const KEY_SYMBOLS = {
+        37: '←', 38: '↑', 39: '→', 40: '↓', 65: 'A', 66: 'B'
+    };
+    
+    const KONAMI_SIGNUP = [38, 38, 40, 40, 37, 39, 37, 39, 65, 66]; // ↑↑↓↓←→←→AB
+    const KONAMI_LOGIN = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65]; // ↑↑↓↓←→←→BA
+    
+    // Auth page challenge handler
+    window.gameRating.auth = {
+        // Challenge variables
+        challengeSequence: [],
+        challengeUserInput: [],
+        challengePressTimes: [],
+        
+        // Konami variables
+        konamiInput: [],
+        konamiTimes: [],
+        
+        // Current page info
+        currentPage: '',
+        submitBtnId: '',
+        konamiSequenceId: '',
+        konamiCode: [],
+        konamiRedirect: '',
+        
+        // Initialize the auth challenges
+        init: function(page) {
+            this.currentPage = page;
+            
+            if (page === 'login') {
+                this.submitBtnId = 'submit-login-btn';
+                this.konamiSequenceId = 'konami-sequence-signup-login';
+                this.konamiCode = KONAMI_SIGNUP;
+                this.konamiRedirect = 'register.php';
+            } else {
+                this.submitBtnId = 'submit-register-btn';
+                this.konamiSequenceId = 'konami-sequence-login-reg';
+                this.konamiCode = KONAMI_LOGIN;
+                this.konamiRedirect = 'login.php';
+            }
+            
+            // Set up Konami code display
+            this.setupKonamiDisplay();
+            
+            // Generate symbol challenge
+            this.generateSymbolChallenge();
+            
+            // Set up event listener
+            document.addEventListener('keydown', this.handleKeydown.bind(this));
+        },
+        
+        // Set up Konami code display
+        setupKonamiDisplay: function() {
+            const konamiDiv = document.getElementById(this.konamiSequenceId);
+            if (!konamiDiv) return;
+            
+            if (typeof displayKonamiSequence === 'function') {
+                // Use the global displayKonamiSequence function if available
+                if (this.currentPage === 'login') {
+                    displayKonamiSequence(window.signupSequence || this.createSequenceObjects(KONAMI_SIGNUP), this.konamiSequenceId);
+                } else {
+                    displayKonamiSequence(window.loginSequence || this.createSequenceObjects(KONAMI_LOGIN), this.konamiSequenceId);
+                }
+            } else {
+                // Fallback rendering
+                konamiDiv.innerHTML = '';
+                
+                const sequence = this.konamiCode;
+                sequence.forEach((keyCode, i) => {
+                    const symbolSpan = document.createElement('span');
+                    symbolSpan.className = 'symbol';
+                    symbolSpan.id = `${this.konamiSequenceId}-symbol-${i}`;
+                    symbolSpan.textContent = KEY_SYMBOLS[keyCode] || '?';
+                    symbolSpan.style.margin = '0 5px';
+                    konamiDiv.appendChild(symbolSpan);
+                });
+            }
+        },
+        
+        // Create sequence objects for displayKonamiSequence
+        createSequenceObjects: function(sequence) {
+            return sequence.map(keyCode => ({
+                name: this.getKeyName(keyCode),
+                keyCode: keyCode,
+                symbol: KEY_SYMBOLS[keyCode] || '?'
+            }));
+        },
+        
+        // Get key name from key code
+        getKeyName: function(keyCode) {
+            switch(keyCode) {
+                case 37: return 'left';
+                case 38: return 'up';
+                case 39: return 'right';
+                case 40: return 'down';
+                case 65: return 'a';
+                case 66: return 'b';
+                default: return 'unknown';
+            }
+        },
+        
+        // Generate symbol challenge
+        generateSymbolChallenge: function() {
+            const symbols = [
+                { name: 'up', keyCode: 38, symbol: '↑' },
+                { name: 'down', keyCode: 40, symbol: '↓' },
+                { name: 'left', keyCode: 37, symbol: '←' },
+                { name: 'right', keyCode: 39, symbol: '→' }
+            ];
+            this.challengeSequence = [];
+            
+            // Generate 6 random symbols
+            for (let i = 0; i < 6; i++) {
+                const randomIndex = Math.floor(Math.random() * symbols.length);
+                this.challengeSequence.push({...symbols[randomIndex]});
+            }
+            
+            const challengeDiv = document.getElementById('symbol-challenge');
+            if (!challengeDiv) return;
+            
+            challengeDiv.innerHTML = '';
+            
+            this.challengeSequence.forEach((item, index) => {
+                const symbolSpan = document.createElement('span');
+                symbolSpan.className = 'symbol';
+                symbolSpan.id = `challenge-symbol-${index}`;
+                symbolSpan.textContent = item.symbol;
+                challengeDiv.appendChild(symbolSpan);
+            });
+            
+            this.challengeUserInput = [];
+            this.challengePressTimes = [];
+            
+            const submitBtn = document.getElementById(this.submitBtnId);
+            const statusEl = document.getElementById('challenge-status');
+            
+            if (submitBtn) submitBtn.disabled = true;
+            if (statusEl) statusEl.textContent = 'Press the arrow keys to match the sequence above';
+        },
+        
+        // Highlight challenge symbol
+        highlightChallengeSymbol: function(index) {
+            const symbols = document.querySelectorAll('#symbol-challenge .symbol');
+            symbols.forEach(symbol => symbol.classList.remove('active'));
+            
+            if (index >= 0 && index < symbols.length) {
+                const currentSymbol = document.getElementById(`challenge-symbol-${index}`);
+                if (currentSymbol) currentSymbol.classList.add('active');
+            }
+        },
+        
+        // Reset challenge highlights
+        resetChallengeHighlights: function() {
+            const symbols = document.querySelectorAll('#symbol-challenge .symbol');
+            symbols.forEach(symbol => symbol.classList.remove('active'));
+        },
+        
+        // Handle keydown event
+        handleKeydown: function(e) {
+            // Skip if in input fields
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+                return;
+            }
+            
+            // Process for Konami code
+            this.konamiInput.push(e.keyCode);
+            this.konamiTimes.push(Date.now());
+            
+            if (this.konamiInput.length > this.konamiCode.length) {
+                this.konamiInput.shift();
+                this.konamiTimes.shift();
+            }
+            
+            // Check for Konami sequence match
+            const userInputStr = this.konamiInput.join(',');
+            const konamiCodeStr = this.konamiCode.join(',');
+            
+            // Highlight current symbol in sequence
+            const currentKonamiIndex = this.konamiInput.length - 1;
+            if (currentKonamiIndex >= 0 && currentKonamiIndex < 10) {
+                // Get expected key code
+                const expectedKeyCode = this.konamiCode[currentKonamiIndex];
+                
+                if (this.konamiInput[currentKonamiIndex] === expectedKeyCode) {
+                    if (typeof highlightKonamiSymbol === 'function') {
+                        highlightKonamiSymbol(currentKonamiIndex, this.konamiSequenceId);
+                    } else {
+                        // Fallback highlighting
+                        const symbols = document.querySelectorAll(`#${this.konamiSequenceId} .symbol`);
+                        if (symbols && symbols.length > currentKonamiIndex) {
+                            symbols.forEach((s, i) => {
+                                s.style.color = i === currentKonamiIndex ? '#ff00ff' : '#00ff00';
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // Complete match detected
+            if (userInputStr === konamiCodeStr) {
+                if (window.gameRating.utils.isBotDetected(this.konamiTimes, this.konamiCode.length)) {
+                    window.gameRating.utils.showNotification('Bot detected! Slow down!');
+                } else {
+                    window.location.href = this.konamiRedirect;
+                }
+                
+                this.konamiInput = [];
+                this.konamiTimes = [];
+                
+                if (typeof resetKonamiHighlights === 'function') {
+                    resetKonamiHighlights(this.konamiSequenceId);
+                }
+            }
+            
+            // Process for arrow key challenge
+            if (e.keyCode >= 37 && e.keyCode <= 40) {
+                this.handleChallengeKey(e.keyCode);
+            }
+        },
+        
+        // Handle challenge key press
+        handleChallengeKey: function(keyCode) {
+            this.challengeUserInput.push(keyCode);
+            this.challengePressTimes.push(Date.now());
+            
+            const currentIndex = this.challengeUserInput.length - 1;
+            if (currentIndex >= 0 && currentIndex < this.challengeSequence.length) {
+                if (this.challengeUserInput[currentIndex] === this.challengeSequence[currentIndex].keyCode) {
+                    this.highlightChallengeSymbol(currentIndex);
+                    
+                    // Check if sequence is complete
+                    if (currentIndex === this.challengeSequence.length - 1) {
+                        const statusEl = document.getElementById('challenge-status');
+                        const submitBtn = document.getElementById(this.submitBtnId);
+                        
+                        if (window.gameRating.utils.isBotDetected(this.challengePressTimes, this.challengeSequence.length)) {
+                            if (statusEl) statusEl.textContent = 'Bot detected! Slow down!';
+                            
+                            setTimeout(() => {
+                                if (statusEl) statusEl.textContent = 'Press the arrow keys to match the sequence above';
+                                this.generateSymbolChallenge();
+                            }, 2000);
+                        } else {
+                            if (statusEl) statusEl.textContent = 'Sequence matched! You can now submit the form.';
+                            if (submitBtn) submitBtn.disabled = false;
+                        }
+                    }
+                } else {
+                    // Wrong key
+                    this.resetChallengeHighlights();
+                    
+                    const statusEl = document.getElementById('challenge-status');
+                    if (statusEl) statusEl.textContent = 'Incorrect sequence! Try again.';
+                    
+                    setTimeout(() => {
+                        if (statusEl) statusEl.textContent = 'Press the arrow keys to match the sequence above';
+                        this.generateSymbolChallenge();
+                    }, 2000);
+                }
+            }
+        }
+    };
+    
+    // Initialize on DOM loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Detect current page
+        const currentPage = window.location.pathname.includes('login.php') ? 'login' : 'register';
+        
+        // Initialize auth challenges
+        window.gameRating.auth.init(currentPage);
+    });
+})();

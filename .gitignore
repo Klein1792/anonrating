@@ -1,0 +1,18 @@
+# DB configuration
+
+# Log files
+*.log
+
+# Cache files and directories
+/cache/
+tmp/
+
+# Editor files
+.vscode/
+.idea/
+mobile-controller.js
+mobile-controller.php
+token.txt
+cacert.pem
+api_check.php
+igdb_token.json

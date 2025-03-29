@@ -1,0 +1,134 @@
+/* Base styles */
+:root {
+    --primary-color: #00ff00;
+    --secondary-color: #ff00ff;
+    --tertiary-color: #00ffff;
+    --bg-color: #000000; /* Black background */
+    --text-color: #ffffff;
+    --link-color: #00ffff;
+    --link-hover-color: #ff00ff;
+    --heading-color: #00ff00;
+    --border-color: #333333;
+    --input-bg: #111111;
+    --button-bg: #222222;
+}
+
+/* General retro styles */
+body {
+    margin: 0;
+    padding: 0;
+    color: var(--text-color);
+    background-color: #000000 !important; /* Force black background */
+    font-family: 'Courier New', Courier, monospace;
+    line-height: 1.6;
+    padding-bottom: 60px;
+    padding-top: 60px; /* Default space for header */
+}
+
+/* When konami container exists */
+body:has(.konami-container) {
+    padding-top: 110px; /* Space for both header and konami */
+}
+
+/* Game page shouldn't show konami */
+body.game-page .konami-container {
+    display: none;
+}
+
+/* Index page-specific styling */
+body.index-page {
+    text-align: center;
+    color: #00ff00;
+}
+
+/* Headings and typography */
+h1, h2, h3, .site-description {
+    color: #00ff00;
+    text-shadow: 2px 2px #ff00ff;
+}
+
+h1, h2, h3 { margin: 0; }
+
+/* Shared button styles */
+button, .btn {
+    background: #222;
+    color: #00ff00;
+    border: 2px solid #00ff00;
+    padding: 5px 10px;
+    margin: 0 5px;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    transition: all 0.2s;
+}
+
+button:hover:not(:disabled), .btn:hover {
+    background: #ff00ff;
+    color: #000;
+    border-color: #ff00ff;
+}
+
+button.active, .btn.active {
+    background: #ff00ff;
+    color: #000;
+    border-color: #ff00ff;
+}
+
+button:disabled { 
+    background: #555; 
+    color: #888; 
+    border-color: #888; 
+    cursor: not-allowed; 
+}
+
+/* Shared textarea and input styles */
+textarea, input[type="text"], input[type="password"], select {
+    width: 100%;
+    background: #222;
+    color: #00ff00;
+    border: 2px solid #ff00ff;
+    padding: 10px;
+    margin-bottom: 10px;
+    font-family: 'Courier New', Courier, monospace;
+    box-sizing: border-box;
+}
+
+/* Form layouts */
+form {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: rgba(34, 34, 34, 0.5);
+    border: 1px solid #333;
+    border-radius: 5px;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    background-color: rgba(34, 34, 34, 0.5);
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #333;
+}
+
+th {
+    background-color: #111;
+    color: #00ff00;
+}
+
+tr:hover {
+    background-color: rgba(51, 51, 51, 0.5);
+}
+
+/* Basic responsive adjustments */
+@media (max-width: 480px) {
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.3rem; }
+    h3 { font-size: 1.1rem; }
+    input, select, button { font-size: 16px; padding: 14px 10px; }
+}

@@ -1,0 +1,151 @@
+/* Header container */
+.header-container {
+    position: fixed;
+    top: 0;
+    left: 50%; /* Start positioning from the center */
+    transform: translateX(-50%); /* Shift it back by half its width */
+    width: 100%; /* Ensure it spans the full width */
+    max-width: 1200px; /* Match the nav-tabs width */
+    background: #000084; /* Match header background */
+    border-bottom: 2px solid #00aaaa;
+    z-index: 1000;
+    padding: 0; /* Remove extra padding */
+    box-sizing: border-box;
+    height: 67.59px; /* Set height to match header-main */
+}
+
+/* Remove this problematic selector */
+/* body:has(.konami-container) .header-container {
+    top: 40px;
+} */
+
+/* Header main content */
+.header-main {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center; /* Align items vertically */
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 15px;
+    height: 100%; /* Match the height of header-container */
+    box-sizing: border-box;
+}
+
+/* Site branding (left side) */
+.site-branding {
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Center vertically */
+    align-items: flex-start;
+    max-width: 50%;
+}
+
+.header-main h1 {
+    font-size: 1.5rem; /* Adjust font size */
+    margin: 0;
+    padding: 0;
+    font-weight: bold;
+    text-shadow: 2px 2px 0px #000000;
+    letter-spacing: 1px;
+    text-align: left;
+}
+
+.header-main h1 a {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.site-description {
+    font-size: 0.8rem; /* Adjust font size */
+    margin: 0;
+    font-style: italic;
+    text-align: left;
+}
+
+/* User status (right side) */
+.user-status {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+#status {
+    font-size: 0.9rem;
+    margin-top: 0;
+    padding: 5px 10px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+#status a {
+    color: #00ffff;
+    text-decoration: none;
+    margin: 0 5px;
+}
+
+#status a:hover {
+    color: #ff00ff;
+    text-decoration: underline;
+}
+
+/* Custom Notification */
+.custom-notification {
+    position: fixed;
+    top: 80px; /* Position below header */
+    right: 10px;
+    background: #222;
+    color: #00ff00;
+    border: 2px solid #ff00ff;
+    padding: 10px;
+    z-index: 1001;
+    display: none;
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.7);
+}
+
+.custom-notification p { 
+    margin: 0; 
+}
+
+/* Responsive header styles */
+@media (max-width: 768px) {
+    .header-container {
+        padding: 5px;
+    }
+    
+    .header-main {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .site-branding {
+        max-width: 100%;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+    
+    .header-main h1 {
+        font-size: 1.2rem;
+        text-align: center;
+    }
+    
+    .site-description {
+        font-size: 0.7rem;
+        text-align: center;
+    }
+    
+    .user-status {
+        width: 100%;
+        text-align: center;
+    }
+    
+    #status {
+        width: 100%;
+        text-align: center;
+        font-size: 0.8rem;
+        padding: 3px 5px;
+    }
+}

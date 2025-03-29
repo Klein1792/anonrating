@@ -1,0 +1,18 @@
+{
+    "name": "nbthe/gamerating",
+    "autoload": {
+        "psr-4": {
+            "Nbthe\\Gamerating\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Klein1792",
+            "email": "nbthe@live.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "firebase/php-jwt": "dev-main"
+    }
+}

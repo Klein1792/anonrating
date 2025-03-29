@@ -1,0 +1,66 @@
+/* Game cards grid layout */
+.game-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    padding: 15px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Mobile-specific adjustments for 2 cards per row */
+@media (max-width: 768px) {
+    .game-cards-container {
+        grid-template-columns: repeat(2, 1fr); /* Always 2 columns on mobile */
+        gap: 10px; /* Smaller gap on mobile */
+        padding: 10px;
+    }
+    
+    .game-card {
+        min-width: unset; /* Remove min-width to allow smaller cards */
+    }
+    
+    /* Make card content fit the smaller size */
+    .game-card-title {
+        font-size: 14px !important;
+        margin-bottom: 5px !important;
+    }
+    
+    .game-card-meta {
+        font-size: 12px !important;
+    }
+    
+    .game-card-img {
+        height: 90px !important; /* Smaller images */
+    }
+    
+    /* Adjust button and icon sizes */
+    .game-card-buttons .btn {
+        padding: 4px 8px !important;
+        font-size: 12px !important;
+    }
+    
+    .rating-box {
+        transform: scale(0.8) !important;
+        transform-origin: left center !important;
+    }
+}
+
+/* Extra small devices - portrait phones */
+@media (max-width: 375px) {
+    .game-cards-container {
+        padding: 5px;
+    }
+    
+    .game-card-title {
+        font-size: 12px !important;
+    }
+    
+    .game-card-img {
+        height: 80px !important;
+    }
+    
+    .game-card-body {
+        padding: 6px !important;
+    }
+}

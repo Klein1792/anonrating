@@ -1,0 +1,22 @@
+/* Main CSS file that imports all others in the correct order */
+
+/* First load base styles (variables, general elements) */
+@import 'base.css';
+
+/* Then load layout definitions */
+@import 'layout.css';
+
+/* Then load component styles */
+@import 'components.css';
+
+/* Then load specific section styles */
+@import 'header.css';
+@import 'konami-code.css';
+@import 'game-cards.css';
+
+/* Then load mobile-specific styles */
+@import 'mobile-controller.css';
+@import 'mobile-nav.css';
+
+/* Finally load responsive styles - these should override everything else */
+@import 'responsive.css';

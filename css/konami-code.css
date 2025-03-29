@@ -1,0 +1,177 @@
+/* Konami wrapper for positioning */
+.konami-wrapper {
+    position: absolute; /* Align with header-main */
+    top: 0;
+    right: 0;
+    height: 100%; /* Match header-container height */
+    display: flex;
+    align-items: center; /* Center vertically */
+    justify-content: flex-end;
+    background: transparent; /* Remove background */
+    padding-right: 15px;
+    z-index: 999;
+}
+
+/* Konami container */
+.konami-container {
+    display: flex;
+    flex-direction: column; /* Stack login above signup */
+    align-items: flex-end; /* Align to the right */
+    gap: 5px; /* Add spacing between sections */
+}
+
+/* Konami section layout */
+.konami-section {
+    display: flex;
+    justify-content: center; /* Center align both text and symbols */
+    align-items: center;
+    gap: 10px; /* Add spacing between text and symbols */
+    background-color: rgba(0, 0, 0, 0.2); /* Semi-transparent background */
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.konami-instructions {
+    color: #ffffff;
+    font-size: 0.8rem; /* Reduce font size */
+    font-weight: bold;
+}
+
+/* Symbol display */
+.symbols {
+    display: flex;
+    gap: 3px;
+    flex-grow: 1;
+    justify-content: center;
+}
+
+.symbol {
+    display: inline-block;
+    width: 20px; /* Reduce width */
+    height: 20px; /* Reduce height */
+    line-height: 20px;
+    text-align: center;
+    background-color: #000063;
+    color: #ffffff;
+    border: 1px solid #00aaaa;
+    border-radius: 4px;
+    font-size: 12px; /* Reduce font size */
+    margin: 0 5px; /* Add spacing between symbols */
+}
+
+.symbol.active {
+    background-color: #00aaaa;
+    color: #000063;
+    transform: scale(1.1);
+}
+
+/* Combined sequence display */
+#konami-sequence-signup-login-parent { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    margin: 20px 0; 
+    width: 100%; 
+}
+
+#konami-sequence-signup-login { 
+    display: flex; 
+    justify-content: center; 
+    width: 100%; 
+    min-height: 30px; 
+    gap: 8px; 
+}
+
+#konami-sequence-signup-login .symbol { 
+    margin: 0 5px; 
+    font-size: 24px; 
+}
+
+
+.konami-btn {
+    padding: 8px 12px;
+    min-width: 40px;
+    font-size: 18px;
+}
+
+/* Toggle button for mobile */
+.konami-toggle {
+    display: none; /* Hidden by default, shown in mobile media query */
+    background-color: #000063;
+    color: #00ffff;
+    text-align: center;
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 4px;
+    width: 100%;
+}
+
+.konami-toggle::before {
+    content: "⬇ Konami Codes ⬇";
+    font-size: 14px;
+}
+
+/* Mobile responsive Konami code */
+@media (max-width: 768px) {
+    .konami-wrapper {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        top: auto;
+        z-index: 999;
+        width: 100%;
+        background: #000084;
+        border-top: 2px solid #00aaaa;
+        padding: 0;
+    }
+    
+    .konami-container {
+        flex-direction: column;
+        align-items: center;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        padding: 0;
+    }
+    
+    .konami-container.expanded {
+        max-height: 300px;
+        padding: 10px 0;
+    }
+    
+    .konami-toggle {
+        display: block;
+        margin: 0;
+        background-color: rgba(0, 0, 0, 0.3);
+    }
+    
+    .konami-section {
+        margin: 5px 0;
+        width: 90%;
+        justify-content: center;
+    }
+    
+    .symbols {
+        justify-content: center;
+    }
+    
+    /* Don't show konami container on index page for mobile */
+    body.index-page .konami-wrapper {
+        display: none;
+    }
+}
+
+/* For very small screens */
+@media (max-width: 375px) {
+    .konami-instructions {
+        font-size: 12px;
+    }
+    
+    .symbol {
+        width: 20px;
+        height: 20px;
+        line-height: 20px;
+        font-size: 14px;
+    }
+}

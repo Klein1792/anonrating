@@ -1,0 +1,262 @@
+/* Navigation tabs */
+.nav-tabs {
+    width: 100%; /* Ensure it spans the full width */
+    max-width: 1200px; /* Match header-container width */
+    margin: 0 auto; /* Center align */
+    border-bottom: 1px solid #333;
+    margin-bottom: 20px;
+}
+
+.nav-link {
+    color: #00ffff;
+    background-color: #111;
+    border: 1px solid #333;
+    margin-right: 5px;
+    padding: 8px 15px;
+    border-radius: 5px 5px 0 0;
+}
+
+.nav-link:hover {
+    background-color: #222;
+    color: #ff00ff;
+    border-color: #444;
+}
+
+.nav-link.active {
+    color: #00ff00;
+    background-color: #222;
+    border-bottom-color: #222;
+}
+
+/* Tab content */
+.tab-content {
+    margin-top: 20px;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active, .tab-pane.show.active {
+    display: block;
+}
+
+/* Pagination - Updated for PH style */
+.pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+/* Basic styling for page numbers */
+.page-item .page-link {
+    background: #222;
+    color: #00ff00;
+    border: 2px solid #00ff00;
+    padding: 5px 10px;
+    margin: 0 3px;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    min-width: 40px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.page-item .page-link:hover, 
+.page-item.active .page-link {
+    background: #ff00ff;
+    color: #000;
+    border-color: #ff00ff;
+}
+
+/* Custom arrow buttons */
+.page-item.prev-page .page-link,
+.page-item.next-page .page-link {
+    background-color: #000;
+    color: #ff00ff;
+    border-color: #ff00ff;
+    font-weight: bold;
+}
+
+/* Ellipsis styling */
+.page-item.disabled .page-link {
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: default;
+}
+
+/* Mobile pagination styles */
+@media (max-width: 768px) {
+    .pagination {
+        justify-content: flex-start !important; /* Left align on mobile */
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    
+    .pagination::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    .pagination::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    .pagination::-webkit-scrollbar-thumb {
+        background-color: rgba(0, 255, 0, 0.3);
+        border-radius: 20px;
+    }
+    
+    .page-item .page-link {
+        padding: 5px 8px;
+        min-width: 30px;
+        margin: 0 2px;
+        font-size: 12px;
+    }
+}
+
+/* Mobile optimizations for tabs */
+@media (max-width: 768px) {
+    .nav-tabs {
+        display: flex;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 5px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    
+    .nav-tabs::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    .nav-tabs::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    .nav-tabs::-webkit-scrollbar-thumb {
+        background-color: rgba(0, 255, 0, 0.3);
+        border-radius: 20px;
+    }
+    
+    .nav-item {
+        flex: 0 0 auto; /* Don't grow or shrink */
+        white-space: nowrap;
+    }
+    
+    .nav-link {
+        padding: 5px 10px;
+        font-size: 14px;
+    }
+}
+
+/* Vote buttons */
+.vote-buttons { 
+    display: flex; 
+    justify-content: center; 
+    gap: 10px; 
+    margin: 10px 0; 
+}
+
+.game-votes { 
+    color: #ff00ff; 
+    margin-bottom: 10px; 
+}
+
+/* Symbol Challenge */
+#symbol-challenge .symbol { 
+    font-size: 24px; 
+    margin: 0 5px; 
+    color: #ff00ff; 
+}
+
+#symbol-challenge .symbol.active, .symbols .symbol.active { 
+    color: #00ff00; 
+    text-shadow: 1px 1px #ff00ff; 
+}
+
+#challenge-status { 
+    color: #ff00ff; 
+    margin: 10px 0; 
+}
+
+/* Button variants */
+.btn-primary {
+    background-color: #0077cc;
+    border-color: #0077cc;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0066b3;
+    border-color: #0066b3;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+/* Responsive adjustments for components */
+@media (max-width: 768px) {
+    .symbols { 
+        justify-content: center; 
+        flex-wrap: wrap; 
+    }
+    
+    .symbol { 
+        font-size: 24px !important; 
+        padding: 0 5px; 
+    }
+    
+    input[type="text"], input[type="password"], textarea, select, button {
+        font-size: 16px;
+        padding: 12px;
+        margin: 5px 0;
+    }
+    
+    button, .btn { 
+        min-height: 44px; 
+        padding: 12px 20px; 
+        margin: 10px 0; 
+        touch-action: manipulation; 
+    }
+}
+
+/* Desktop-only controls */
+.desktop-only-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 15px 0;
+}
+
+/* Hide desktop controls on mobile */
+@media (max-width: 768px) {
+    .desktop-only-controls {
+        display: none !important;
+    }
+}
