@@ -5,6 +5,7 @@
     margin: 0 auto; /* Center align */
     border-bottom: 1px solid #333;
     margin-bottom: 20px;
+    justify-content: center;;
 }
 
 .nav-link {
@@ -39,6 +40,20 @@
 
 .tab-pane.active, .tab-pane.show.active {
     display: block;
+}
+
+/* Fix for tab jumping on mobile */
+.tab-content > .tab-pane {
+    display: block;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+}
+
+.tab-content > .active {
+    height: auto;
+    overflow: visible;
+    visibility: visible;
 }
 
 /* Pagination - Updated for PH style */
@@ -130,6 +145,7 @@
         padding-bottom: 5px;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
+        justify-content: center !important;
     }
     
     .nav-tabs::-webkit-scrollbar {
@@ -153,6 +169,18 @@
     .nav-link {
         padding: 5px 10px;
         font-size: 14px;
+    }
+}
+
+/* Fix for tab navigation on mobile */
+@media (max-width: 768px) {
+    .nav-tabs {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: #111;
+        padding-top: 10px;
+        margin-top: -10px; /* Offset the padding */
     }
 }
 

@@ -11,5 +11,5 @@ tmp/
 
 # Editor files
 .vscode/
-mobile-controller.js
 .idea/
+igdb_token.json

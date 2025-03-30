@@ -1,229 +1,289 @@
 <?php
+// filepath: e:\bakcup\xampp\htdocs\gamerating\api.php
+
+// Include configuration first
+require_once 'phpconfig.php';
+
+// Include database connection
+require_once 'db_connect.php';
+
+// Now include auth helper after configuration is loaded
+require_once 'includes/auth_helper.php';
+require_once 'vendor/autoload.php';   
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+// Error handling configuration
+error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/php_errors.log');
 
-// Set headers immediately
-header('Content-Type: application/json');
+// Set headers for CORS and content type
+header('Access-Control-Allow-Origin: *');
+header('Content-Type: application/json; charset=UTF-8');
+header('Access-Control-Allow-Methods: GET, POST');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-// Set up CORS headers first
-$allowedOrigin = $_SERVER['HTTP_ORIGIN'] ?? 'https://localhost:8080';
-if (in_array($allowedOrigin, ['https://localhost:8080', 'https://localhost:8080'])) {
-    header("Access-Control-Allow-Origin: $allowedOrigin");
-} else {
-    header("Access-Control-Allow-Origin: https://localhost:8080");
-}
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Authorization, X-CSRF-Token, Content-Type");
-header("Access-Control-Allow-Credentials: true");
-
-// Handle CORS preflight requests
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-
-require_once 'vendor/autoload.php';
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
-
-include 'db_connect.php';
-include 'api/igdb.php';
-include 'phpconfig.php';
-include 'api/reviews.php';
-include 'api/users.php';
-include 'api/voting.php';
-include 'api/auth.php';
-include 'api/rate_limiter.php';
-include 'includes/auth_helper.php';
-
-// First, get the action so we can determine if authentication is needed
-$action = $_GET['action'] ?? '';
-
-// Function to validate JWT token
-function validateJWT($jwtSecret) {
-    $token = null;
-    if (isset($_COOKIE['access_token'])) {
-        $token = $_COOKIE['access_token'];
-    } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+try {
+    // Include necessary files
+    require_once 'api/auth.php';
+    require_once 'db_connect.php';
+    require_once 'includes/auth_helper.php';
+    require_once 'api/users.php';
+    require_once 'api/igdb.php';
+    require_once 'api/voting.php';
+    require_once 'api/reviews.php';
+    // Start session if not already started
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    // Get request action
+    $action = $_GET['action'] ?? '';
+    
+    // Define public actions that don't need authenticated users
+    $publicActions = [
+        'getPageviews', 
+        'getStatistics', 
+        'logout',
+        'incrementPageview',
+        'games',
+        'search',
+        'getGameVotes',
+        'getGameDetails',
+        'getReviewsByGame',
+        'checkUserVote',
+        'checkReviewVote',
+        'login',
+        'register',
+        'refreshToken'
+    ];
+    
+    // Define semi-restricted actions that need either authenticated or anonymous users
+    $semiRestrictedActions = [
+        'voteGame',
+        'voteReview',
+        'addReview',
+        'editReview',
+        'deleteReview'
+    ];
+    
+    // Define admin-only actions
+    $adminActions = [
+        'getUsers',
+        'getModerators', 
+        'getAdmins', 
+        'banUser', 
+        'unbanUser', 
+        'setModerator', 
+        'removeModerator', 
+        'setAdmin', 
+        'removeAdmin',
+        'deleteGame',
+        'updateGame',
+        'addGame'
+    ];
+    
+    // Check if the current action requires authentication
+    $requiresAuth = !in_array($action, $publicActions);
+    $requiresAdmin = in_array($action, $adminActions);
+    $requiresUser = $requiresAuth && !in_array($action, $semiRestrictedActions);
+    
+    // Extract JWT token if present
+    $jwt = null;
+    
+    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
         if (preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            $token = $matches[1];
+            $jwt = $matches[1];
+        }
+    }
+    
+    // Also check cookies for JWT
+    if (empty($jwt) && isset($_COOKIE['access_token'])) {
+        $jwt = $_COOKIE['access_token'];
+    }
+    
+    // Check if user is authenticated via JWT
+    $isAuthenticated = false;
+    $userData = null;
+    
+    if ($jwt) {
+        try {
+            $decoded = JWT::decode($jwt, new Key(JWT_SECRET, JWT_ALGORITHM));
+            
+            // Validate token
+            if ($decoded->exp > time() && $decoded->iss === 'gamerating-app') {
+                $isAuthenticated = true;
+                $userData = [
+                    'user_id' => $decoded->user_id,
+                    'username' => $decoded->username ?? '',
+                    'is_admin' => $decoded->is_admin ?? false,
+                    'is_moderator' => $decoded->is_moderator ?? false
+                ];
+                
+                // Store in session for consistency
+                $_SESSION['user_id'] = $userData['user_id'];
+                $_SESSION['username'] = $userData['username'];
+                $_SESSION['is_admin'] = $userData['is_admin'];
+                $_SESSION['is_moderator'] = $userData['is_moderator'];
+            }
+        } catch (Exception $e) {
+            // Token invalid, proceed as anonymous
+            error_log('JWT validation failed: ' . $e->getMessage());
+        }
+    }
+    
+    // Create anonymous user session if not authenticated and needed
+    if (!$isAuthenticated && in_array($action, $semiRestrictedActions)) {
+        $anonymousUser = ensureAnonymousUser($db);
+    }
+    
+    // Check authorization for protected actions
+    if ($requiresUser && !$isAuthenticated) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Authentication required',
+            'code' => 'auth_required'
+        ]);
+        exit;
+    }
+    
+    if ($requiresAdmin && (!$isAuthenticated || !$userData['is_admin'])) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Admin privileges required',
+            'code' => 'admin_required'
+        ]);
+        exit;
+    }
+    
+    // Process the API request based on action
+    $handled = false;
+
+    // Auth actions
+    if (function_exists('handleAuthActions')) {
+        $handled = handleAuthActions($action, $db);
+    }
+
+    // IGDB game actions
+    if (!$handled && function_exists('handleIgdbActions')) {
+        $handled = handleIgdbActions($action, $db, IGDB_CLIENT_ID, IGDB_CLIENT_SECRET);
+    }
+
+    if (!$handled && function_exists('handleReviewActions')) {
+        $handled = handleReviewActions($action, $db);
+    }
+
+    if (!$handled && function_exists('handleVotingActions')) {
+        $handled = handleVotingActions($action, $db);
+    }
+
+    if (!$handled && function_exists('handleUserActions') && isset($_SESSION['user_id'])) {
+        $handled = handleUserActions($action, $db, $_SESSION['user_id']);
+    }
+
+    if (!$handled && function_exists('handleSearchActions')) {
+        $handled = handleSearchActions($action, $db);
+    }
+
+    if (!$handled && function_exists('handleStatsActions')) {
+        $handled = handleStatsActions($action, $db);
+    }
+
+    // Default built-in actions if not already handled
+    if (!$handled) {
+        switch ($action) {
+            case 'incrementPageview':
+                // Increment pageview count
+                $db->query("UPDATE pageviews SET total = total + 1 WHERE id = 1");
+                echo json_encode(['success' => true, 'message' => 'Pageview incremented']);
+                $handled = true;
+                break;
+                
+            case 'getPageviews':
+                // Get pageview count
+                $result = $db->query("SELECT total FROM pageviews WHERE id = 1");
+                if ($result && $row = $result->fetch_assoc()) {
+                    echo json_encode(['success' => true, 'total_pageviews' => $row['total']]);
+                } else {
+                    // Create pageviews table if doesn't exist
+                    $db->query("CREATE TABLE IF NOT EXISTS pageviews (id INT PRIMARY KEY, total BIGINT NOT NULL DEFAULT 0)");
+                    $db->query("INSERT IGNORE INTO pageviews (id, total) VALUES (1, 1)");
+                    echo json_encode(['success' => true, 'total_pageviews' => 1]);
+                }
+                $handled = true;
+                break;
+            
+            // Add the updateAllGameRatings case here
+            case 'updateAllGameRatings':
+                // Update average ratings for all games
+                $result = $db->query('SELECT DISTINCT game_id FROM reviews');
+                $updated = 0;
+                
+                if ($result) {
+                    while ($row = $result->fetch_assoc()) {
+                        $gameId = (int)$row['game_id'];
+                        
+                        // Calculate average
+                        $ratingStmt = $db->prepare('
+                            SELECT AVG(rating) as avg_rating, COUNT(*) as count
+                            FROM reviews
+                            WHERE game_id = ?
+                        ');
+                        $ratingStmt->bind_param('i', $gameId);
+                        $ratingStmt->execute();
+                        $ratingResult = $ratingStmt->get_result();
+                        $stats = $ratingResult->fetch_assoc();
+                        
+                        // Update game table
+                        $updateStmt = $db->prepare('
+                            UPDATE games
+                            SET avg_rating = ?, review_count = ?, last_rating_update = NOW()
+                            WHERE id = ?
+                        ');
+                        $avgRating = $stats['avg_rating'] ? round($stats['avg_rating'], 1) : NULL;
+                        $reviewCount = (int)$stats['count'];
+                        $updateStmt->bind_param('dii', $avgRating, $reviewCount, $gameId);
+                        $updateStmt->execute();
+                        $updated++;
+                    }
+                }
+                
+                echo json_encode([
+                    'success' => true, 
+                    'message' => "Updated ratings for $updated games"
+                ]);
+                $handled = true;
+                break;
+                
+            default:
+                // Unknown action
+                if (!empty($action)) {
+                    echo json_encode(['success' => false, 'error' => 'Invalid action: ' . $action]);
+                    $handled = true;
+                }
+                break;
         }
     }
 
-    if (!$token) {
-        return null;
+    // If nothing handled the request
+    if (!$handled) {
+        echo json_encode(['success' => false, 'error' => 'No action specified']);
     }
-
-    try {
-        $decoded = JWT::decode($token, new Key($jwtSecret, 'HS256'));
-        return $decoded->user_id;
-    } catch (Exception $e) {
-        error_log("JWT validation error: " . $e->getMessage());
-        return null;
-    }
-}
-
-// Define public actions that don't need authentication
-$publicActions = [
-    'getPageviews', 
-    'getStatistics', 
-    'logout',
-    'incrementPageview',
-    'games',
-    'getGenres',
-    'getPlatforms',
-    'search',
-    'getGameVotes',
-    'getGameDetails',
-    'getReviewsByGame',
-    'checkUserVote',
-    'checkReviewVote',
-    'likeGame',
-    'dislikeGame',
-    'add'
-];
-
-// Get user ID from JWT if available
-$user_id = null;
-$requiresAuth = true;
-
-// Check if this is a public action that doesn't need authentication
-if (in_array($action, $publicActions)) {
-    $requiresAuth = false;
-} else if ($action === 'games') {
-    $gameType = $_GET['type'] ?? '';
-    $publicGameTypes = ['recent', 'featured', 'genre', 'platform'];
-    if (in_array($gameType, $publicGameTypes)) {
-        $requiresAuth = false;
-    }
-}
-
-// Try to get the user ID from JWT or session
-$jwtSecret = SECRET_KEY;
-$user_id = validateJWT($jwtSecret);
-
-// Fallback to session if JWT is invalid or missing
-if ($user_id === null && isset($_SESSION['user_id'])) {
-    $user_id = (int)$_SESSION['user_id'];
-    // Optionally, regenerate a new JWT token if the session is still valid
-    $token = bin2hex(random_bytes(32));
-    $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
-    $stmt = $db->prepare('INSERT INTO access_tokens (user_id, token, expires_at) VALUES (?, ?, ?)');
-    $stmt->bind_param('iss', $user_id, $token, $expiresAt);
-    $stmt->execute();
-    $stmt->close();
-    $_SESSION['access_token'] = $token;
-    setcookie('access_token', $token, [
-        'expires' => strtotime($expiresAt),
-        'path' => '/',
-        'httponly' => false,
-        'samesite' => 'Strict'
-    ]);
-}
-
-// Only require authentication for protected endpoints
-if ($requiresAuth && $user_id === null) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized: Valid authentication required for this action']);
-    exit;
-}
-
-// Validate CSRF token for POST requests (except for public actions)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($action, $publicActions)) {
-    $headers = getallheaders();
-    $csrfToken = isset($headers['X-CSRF-Token']) ? $headers['X-CSRF-Token'] : (isset($_POST['csrf_token']) ? $_POST['csrf_token'] : null);
-
-    if (!$csrfToken || !isset($_SESSION['csrf_token']) || $csrfToken !== $_SESSION['csrf_token']) {
-        http_response_code(403);
-        echo json_encode(['error' => 'Invalid CSRF token']);
-        exit;
-    }
-}
-
-// Check database connection
-if (!$db || $db->connect_error) {
-    echo json_encode(['error' => 'Database connection failed: ' . ($db ? $db->connect_error : 'No DB object')]);
-    exit;
-}
-
-// Auth-related API endpoints
-elseif ($action === 'check_auth') {
-    $wasAuthenticated = isset($_SESSION['user_id']);
-    
-    // Try to verify and refresh if needed
-    $isAuthenticated = verifyAuth($db);
-    
-    // Check if token was refreshed (by looking for new expiration time)
-    $tokenRefreshed = $isAuthenticated && isset($_SESSION['access_token_expires']) &&
-                     (!$wasAuthenticated || (strtotime($_SESSION['access_token_expires']) > time() + 86400 * 6));
-    
+} catch (Throwable $e) {
+    // Log and report error
+    error_log('API Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
     echo json_encode([
-        'authenticated' => $isAuthenticated,
-        'token_refreshed' => $tokenRefreshed,
-        'expires_at' => $_SESSION['access_token_expires'] ?? null
+        'success' => false,
+        'error' => 'Server error',
+        'message' => 'An unexpected error occurred. Please try again later.',
+        'debug' => $e->getMessage()
+        // In development mode, you might want to include: 'debug' => $e->getMessage()
     ]);
-    exit;
 }
 
-// Handle actions
-if (handleIgdbActions($action, IGDB_CLIENT_ID, IGDB_CLIENT_SECRET, 'token.txt', $db)) {
-    // IGDB actions handled
-} elseif (handleReviewActions($action, $db, $user_id)) {
-    // Review actions handled
-} elseif (handleUserActions($action, $db, $user_id)) {
-    // User actions handled
-} elseif (handleVotingActions($action, $db, $user_id)) {
-    // Voting actions handled
-} elseif (handleAuthActions($action)) {
-    // Auth actions handled
-} elseif ($action === 'incrementPageview') {
-    $db->query("UPDATE pageviews SET total = total + 1 WHERE id = 1");
-    echo json_encode(['message' => 'Pageview incremented']);
-} elseif ($action === 'getPageviews') {
-    $result = $db->query("SELECT total FROM pageviews WHERE id = 1");
-    if ($result && $row = $result->fetch_assoc()) {
-        echo json_encode(['total_pageviews' => $row['total']]);
-    } else {
-        $error_message = $db->error ? $db->error : 'Unknown error';
-        error_log("Failed to fetch pageviews: " . $error_message);
-        echo json_encode(['error' => 'Failed to fetch pageviews: ' . $error_message]);
-    }
-} elseif ($action === 'getStatistics') {
-    $result = $db->query("SELECT COUNT(*) as total FROM games");
-    if ($result && $row = $result->fetch_assoc()) {
-        echo json_encode(['total_games' => $row['total']]);
-    } else {
-        echo json_encode(['error' => 'Failed to fetch statistics']);
-    }
-} elseif ($action === 'logout') {
-    error_log('Logout action called'); // Debug
-    
-    // First call the consolidated logout function from auth_helper.php
-    logoutUser($db);
-    
-    // Then restart session to ensure new session ID
-    session_regenerate_id(true);
-    
-    // Send appropriate headers to prevent caching
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    header('Cache-Control: post-check=0, pre-check=0', false);
-    header('Pragma: no-cache');
-    
-    echo json_encode(['success' => true, 'message' => 'Logged out successfully']);
-} elseif ($action === 'reviewAction') {
-    $reviewAction = isset($_GET['reviewAction']) ? $_GET['reviewAction'] : '';
-    // Include reviews.php file if it's not included already
-    if (!function_exists('handleReviewActions')) {
-        include 'api/reviews.php';
-    }
-    
-    // Handle the review action
-    handleReviewActions($reviewAction, $db, $user_id);
-} else {
-    echo json_encode(['error' => 'Invalid action']);
-}
-
-$db->close();
+// Close database connection
+if (isset($db) && $db instanceof mysqli) { $db->close(); }
 ?>

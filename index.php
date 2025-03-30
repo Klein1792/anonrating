@@ -47,18 +47,18 @@ include 'db_connect.php';
             </div>
             <div class="col-md-3">
                 <select id="sort-select" class="form-select">
-                    <option value="name">Sort by Name</option>
-                    <option value="votes">Sort by Votes</option>
-                    <option value="likes">Sort by Likes %</option>
-                    <option value="release">Sort by Release Date</option>
-                    <option value="rating">Sort by IGDB Rating</option>
+                    <option value="rating">IGDB Rating</option>
+                    <option value="release">Release Date</option>
+                    <option value="approval">User Approval %</option>
+                    <option value="avg_rating">User Ratings</option>
+                    <option value="name">Name</option>
                 </select>
             </div>
         </div>
 
         <ul class="nav nav-tabs" id="gameTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="featured-tab" data-bs-toggle="tab" data-bs-target="#featured" type="button" role="tab">Featured</button>
+                <button class="nav-link active" id="top-rated-tab" data-bs-toggle="tab" data-bs-target="#top-rated" type="button" role="tab" aria-controls="top-rated" aria-selected="true">Top Rated</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="recent-tab" data-bs-toggle="tab" data-bs-target="#recent" type="button" role="tab">Recently Released</button>
@@ -81,9 +81,13 @@ include 'db_connect.php';
         </ul>
 
         <div class="tab-content" id="gameTabsContent">
-            <div class="tab-pane fade show active" id="featured" role="tabpanel">
-                <div class="new-games-grid" id="featured-games"></div>
-                <nav class="pagination" id="featured-pagination"></nav>
+            <div class="tab-pane fade show active" id="top-rated" role="tabpanel" aria-labelledby="top-rated-tab">
+                <div id="top-rated-games" class="new-games-grid">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+                <nav class="pagination" id="top-rated-pagination"></nav>
             </div>
             <div class="tab-pane fade" id="recent" role="tabpanel">
                 <div class="new-games-grid" id="recent-games"></div>

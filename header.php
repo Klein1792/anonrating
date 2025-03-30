@@ -47,10 +47,16 @@ if (isset($_SESSION['user_id'])) {
     
     <!-- Core JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/globals.js"></script>
+<!-- Core utilities first -->
 <script src="js/konami.js"></script>
 <script src="js/konami-handler.js"></script>
-<script src="js/challenge-handler.js"></script>
+<!-- Specific functionality modules -->
+<script src="js/auth-client.js"></script>
+
+<!-- Page-specific scripts loaded conditionally -->
+<?php if ($current_page === 'game.php'): ?>
+<script src="js/game-page.js"></script>
+<?php endif; ?>
     <!-- Any page-specific head content -->
     <?php if (isset($head_content)) echo $head_content; ?>
 </head>
@@ -73,7 +79,7 @@ if (isset($_SESSION['user_id'])) {
                         <?php if ($is_moderator): ?>
                             | <a href="moderator.php">Moderator Panel</a>
                         <?php endif; ?>
-                        | <<a href="#" onclick="return logout();">Click here to logout</a></a>
+                        | <a href="#" onclick="return logout();">Click here to logout</a>
                     <?php endif; ?>
                     </p>
                 </div>

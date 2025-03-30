@@ -1,17 +1,16 @@
-/* Game cards (index.php) */
-.new-games-container { 
-    margin: 20px 0; 
-}
+/* OPTIMIZED CSS - Replace your existing game-cards.css */
 
+/* Game cards base styles */
 .new-games-grid { 
-    display: grid;  /* Change from flex to grid */
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); /* Desktop sizing */
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 20px; 
     justify-content: center; 
+    margin: 20px 0;
 }
 
 .new-game {
-    width: 100%; /* Change from fixed width to 100% to fit grid cell */
+    width: 100%;
     height: 350px;
     border: 2px solid #ff00ff;
     background: #111;
@@ -21,12 +20,14 @@
     flex-direction: column;
     box-sizing: border-box;
     overflow: hidden;
+    position: relative; /* For badge positioning */
 }
 
 .new-game a { 
     text-decoration: none; 
 }
 
+/* Image styles */
 .new-game-image {
     width: 100%;
     height: 200px;
@@ -41,6 +42,7 @@
     object-position: top;
 }
 
+/* Text styles */
 .new-game h3 {
     color: #00ff00;
     text-shadow: 1px 1px #ff00ff;
@@ -63,23 +65,59 @@
     -webkit-box-orient: vertical;
 }
 
-.new-game .release-label { 
-    color: #00ffff; 
+/* Label colors */
+.new-game .release-label { color: #00ffff; }
+.new-game .rating-label { color: #ffff00; }
+.new-game .likes-label { color: #ff8000; }
+.new-game .likes-content { color: #ff00ff; }
+
+/* Rating badge base styles */
+.new-game .avg-rating,
+.game-card .user-rating {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    border: 1px solid;
+    z-index: 2;
 }
 
-.new-game .rating-label { 
-    color: #ffff00; 
+.new-game .avg-rating {
+    top: 10px;
+    left: 10px;
 }
 
-.new-game .likes-label { 
-    color: #ff8000; 
+/* Rating color coding */
+.avg-rating.high, .game-card .user-rating.high {
+    color: #00ffff;
+    border-color: #00ffff;
+    box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
 }
 
-.new-game .likes-content { 
-    color: #ff00ff; 
+.avg-rating.medium, .game-card .user-rating.medium {
+    color: #ffff00;
+    border-color: #ffff00;
+    box-shadow: 0 0 5px rgba(255, 255, 0, 0.5);
 }
 
-/* Single Game Page */
+.avg-rating.low, .game-card .user-rating.low {
+    color: #ff6600;
+    border-color: #ff6600;
+    box-shadow: 0 0 5px rgba(255, 102, 0, 0.5);
+}
+
+.avg-rating.none, .game-card .user-rating.none {
+    color: #888888;
+    border-color: #888888;
+    font-size: 10px;
+    padding: 2px 5px;
+    background-color: rgba(0, 0, 0, 0.6);
+    box-shadow: none;
+}
+
+/* Single game page styles */
 .game-detail-container {
     display: flex;
     flex-direction: column;
@@ -132,37 +170,49 @@
     color: #00ffff;
 }
 
-/* Responsive game cards - UPDATE THIS SECTION */
+/* Responsive styles */
 @media (max-width: 768px) {
     .new-games-grid {
-        grid-template-columns: repeat(2, 1fr); /* EXACTLY 2 columns on mobile */
-        gap: 10px; /* Smaller gap on mobile */
-        padding: 0 5px; /* Add side padding */
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        padding: 0 5px;
     }
     
     .new-game {
-        height: auto; /* Allow height to adapt to content */
-        min-height: 280px; /* Minimum height */
+        height: auto;
+        min-height: 280px;
     }
     
     .new-game-image {
-        height: 220px; /* Taller images for vertical rectangle ratio */
-        width: 100%;
-        border-width: 1px; /* Thinner border to maximize image area */
+        height: 180px;
+        border-width: 1px;
     }
     
     .new-game h3 {
-        font-size: 14px; /* Smaller title text */
-        margin: 5px 0; /* Less margin */
+        font-size: 14px;
+        margin: 5px 0;
     }
     
     .new-game p {
-        font-size: 12px; /* Smaller description text */
-        margin: 3px 0; /* Less margin */
-        -webkit-line-clamp: 1; /* Only show 1 line of description on mobile */
+        font-size: 12px;
+        margin: 3px 0;
+        -webkit-line-clamp: 1;
     }
     
-    /* Game detail page adjustments */
+    .new-game .avg-rating,
+    .game-card .user-rating {
+        font-size: 10px;
+        padding: 2px 6px;
+        top: 5px;
+    }
+    
+    .new-game .avg-rating { left: 5px; }
+    
+    .avg-rating.none, .game-card .user-rating.none {
+        font-size: 8px;
+        padding: 2px 4px;
+    }
+    
     .game-header {
         flex-direction: column;
     }
@@ -179,11 +229,11 @@
 /* Extra small devices */
 @media (max-width: 380px) {
     .new-games-grid {
-        grid-template-columns: repeat(2, 1fr); /* Still 2 columns, even on very small screens */
+        grid-template-columns: repeat(2, 1fr);
     }
     
     .new-game-image {
-        height: 160px; /* Still tall but adjusted for smaller screens */
+        height: 140px;
     }
     
     .new-game h3 {

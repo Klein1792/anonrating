@@ -5,12 +5,17 @@
 (function() {
     let currentPage = {};
     let currentSearch = '';
-    let currentSort = 'likes';
+    let currentSort = 'rating'; // Default sort
     let currentSortDirection = 'DESC';
     
-    // Define tab configurations
+    // Update the tabs configuration - simplified with no sort-specific fields
     const tabs = {
-        featured: { id: 'featured-games', pagination: 'featured-pagination', type: 'featured' },
+        'top-rated': {
+            id: 'top-rated-games',
+            type: 'all', 
+            pagination: 'top-rated-pagination'
+            // Removed sort and sortDirection properties
+        },
         recent: { id: 'recent-games', pagination: 'recent-pagination', type: 'recent' },
         rpg: { id: 'rpg-games', pagination: 'rpg-pagination', type: 'genre', genre: 'Role-playing (RPG)' },
         shooter: { id: 'shooter-games', pagination: 'shooter-pagination', type: 'genre', genre: 'Shooter' },
@@ -21,6 +26,18 @@
     
     // Initialize when DOM is loaded
     document.addEventListener('DOMContentLoaded', () => {
+        // Prevent Bootstrap tabs from auto-scrolling
+        const originalScrollTo = window.scrollTo;
+        window.scrollTo = function() {
+            // Check if this is from Bootstrap's tab activation
+            const stackTrace = new Error().stack || '';
+            if (stackTrace.includes('bootstrap') && stackTrace.includes('tab')) {
+                return; // Skip scrolling from Bootstrap tabs
+            }
+            // Otherwise allow normal scrolling
+            return originalScrollTo.apply(this, arguments);
+        };
+        
         // Prevent arrow key navigation for tabs
         const tabButtons = document.querySelectorAll('[role="tab"]');
         tabButtons.forEach(button => {
@@ -49,6 +66,9 @@
         
         // Setup tab change listeners for pagination scrolling
         setupTabChangeListeners();
+
+        // REMOVE: We don't need this anymore
+        // initTabSpecificSortControls();
     });
     
     // Set up event listeners for search, sort, and admin buttons
@@ -62,7 +82,7 @@
             }, 300));
         }
         
-        // Sort select
+        // Sort select - KEEP this single global sort control
         const sortSelect = document.getElementById('sort-select');
         if (sortSelect) {
             sortSelect.addEventListener('change', e => {
@@ -122,8 +142,17 @@
         Object.values(tabs).forEach(tab => loadTab(tab, currentPage[tab.id] || 1));
     }
     
-    // Load a specific tab with games
+    // Update the loadTab function to use global sort settings
     function loadTab(tab, page = 1) {
+        // Map frontend sort values to backend sort values if needed
+        const sortMap = {
+            'release': 'first_release_date'
+             // No need to map 'approval' since it's the same on backend
+          
+        };
+        
+        const apiSort = sortMap[currentSort] || currentSort;
+        
         currentPage[tab.id] = page;
         const params = new URLSearchParams({
             action: 'games',
@@ -131,7 +160,8 @@
             page: page,
             limit: 20,
             search: currentSearch,
-            sort: currentSort,
+            // Use mapped sort value
+            sort: apiSort,
             sortDirection: currentSortDirection
         });
         
@@ -153,7 +183,19 @@
                 }
                 
                 const games = Array.isArray(data.games) ? data.games : [];
-                games.forEach(game => container.appendChild(renderGameCard(game)));
+                
+                // Special messaging for empty states
+                if (games.length === 0) {
+                    const infoMsg = document.createElement('div');
+                    infoMsg.className = 'alert alert-info';
+                    infoMsg.textContent = currentSearch 
+                        ? `No games found matching "${currentSearch}"`
+                        : 'No games found in this category';
+                    container.appendChild(infoMsg);
+                } else {
+                    // Render all games
+                    games.forEach(game => container.appendChild(renderGameCard(game)));
+                }
                 
                 renderPornhubPagination(tab, Math.ceil((data.total || 0) / 20), page);
             })
@@ -163,38 +205,60 @@
             });
     }
     
-    // Render a single game card
+    // Use correct property names in renderGameCard
     function renderGameCard(game) {
         const div = document.createElement('div');
         div.className = 'new-game';
         
-        // Fix image URL handling
-        const coverUrl = game.cover?.url 
-            ? (game.cover.url.startsWith('https:') ? game.cover.url : 'https:' + game.cover.url).replace('t_thumb', 't_cover_big')
-            : `${window.baseUrl}/images/default-image.jpg`;
+        const coverUrl = getCoverUrl(game);
+        const avgRatingHtml = getAverageRatingBadge(game);
         
+        // Use likes and dislikes from database (not likes_count)
+        const likes = game.likes || 0;
+        const dislikes = game.dislikes || 0;
+        const totalVotes = likes + dislikes;
+        
+        // Use approval_percent from database
+        let approvalText = 'No votes';
+        if (totalVotes > 0) {
+            const approvalPercent = Math.round(game.approval_percent); 
+            approvalText = `${approvalPercent}% (${likes}/${totalVotes})`;
+        }
+        
+        // Build the card with a single innerHTML operation
         div.innerHTML = `
+            ${avgRatingHtml}
             <a href="game.php?id=${game.id}">
                 <div class="new-game-image">
                     <img src="${coverUrl}" alt="${game.name || 'Unknown Game'}" onerror="this.src='${window.baseUrl}/images/default-image.jpg';">
                 </div>
                 <h3>${game.name || 'Unknown'}</h3>
                 <p><span class="release-label">Release:</span> ${formatDate(game.first_release_date)}</p>
-                <p><span class="rating-label">Rating:</span> ${game.rating ? Math.round(game.rating) + '/100' : 'N/A'}</p>
-                <p class="game-votes" id="votes-${game.id}"><span class="likes-label">Likes:</span> <span class="likes-content">Loading...</span></p>
+                <p><span class="rating-label">IGDB:</span> ${game.rating ? Math.round(game.rating) + '/100' : 'N/A'}</p>
+                <p class="game-votes">
+                    <span class="likes-label">Likes:</span> <span class="likes-content">${approvalText}</span>
+                </p>
             </a>
         `;
         
-        // Update votes asynchronously
-        updateGameVotes(game.id).then(voteData => {
-            const votesElement = div.querySelector(`.game-votes .likes-content`);
-            if (votesElement) {
-                const percent = voteData.total ? Math.round((voteData.likes / voteData.total) * 100) : 0;
-                votesElement.textContent = voteData.total ? `${percent}% (${voteData.likes}/${voteData.total})` : 'No votes';
-            }
-        });
-        
         return div;
+    }
+
+    // Helper functions for cleaner code
+    function getCoverUrl(game) {
+        return game.cover?.url 
+            ? (game.cover.url.startsWith('https:') ? game.cover.url : 'https:' + game.cover.url).replace('t_thumb', 't_cover_big')
+            : `${window.baseUrl}/images/default-image.jpg`;
+    }
+
+    function getAverageRatingBadge(game) {
+        if (game.avg_rating && game.avg_rating > 0) {
+            const rating = parseFloat(game.avg_rating);
+            const displayRating = rating === 10 ? '10' : rating.toFixed(1);
+            const avgRatingClass = rating >= 7 ? 'high' : (rating >= 4 ? 'medium' : 'low');
+            return `<div class="avg-rating ${avgRatingClass}">${displayRating} ★</div>`;
+        }
+        return `<div class="avg-rating none">No rating</div>`;
     }
     
     // Format date helper
@@ -275,22 +339,7 @@
         }
         nextLi.appendChild(nextLink);
         ul.appendChild(nextLi);
-        
         nav.appendChild(ul);
-        
-        // Scroll active page into view on mobile
-        if (window.innerWidth <= 768) {
-            const activePageItem = ul.querySelector('.page-item.active');
-            if (activePageItem) {
-                setTimeout(() => {
-                    activePageItem.scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'nearest', 
-                        inline: 'center' 
-                    });
-                }, 100);
-            }
-        }
     }
     
     // Helper function to add page button
@@ -325,15 +374,6 @@
         
         li.appendChild(span);
         ul.appendChild(li);
-    }
-    
-    // Get votes for a game
-    function updateGameVotes(gameId) {
-        if (!gameId) return Promise.resolve({ likes: 0, total: 0 });
-        
-        return callApi(`action=getGameVotes&id=${gameId}`)
-            .then(data => data.error ? { likes: 0, total: 0 } : data)
-            .catch(() => ({ likes: 0, total: 0 }));
     }
     
     // API call helper function
@@ -388,10 +428,21 @@
         // For Bootstrap tabs
         const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
         tabButtons.forEach(tab => {
+            // Use show.bs.tab instead of shown.bs.tab to prevent default scrolling
+            tab.addEventListener('show.bs.tab', function(e) {
+                // Store current scroll position before tab changes
+                window.tabScrollPosition = window.scrollY;
+            });
+            
             tab.addEventListener('shown.bs.tab', function(e) {
                 const targetTabId = e.target.getAttribute('data-bs-target').substring(1);
                 const tabConfig = Object.values(tabs).find(t => t.id === targetTabId + '-games');
+                
+                // Restore scroll position immediately
+                window.scrollTo(0, window.tabScrollPosition || 0);
+                
                 if (tabConfig) {
+                    // Delay pagination scrolling slightly
                     setTimeout(() => {
                         scrollActivePaginationIntoView(tabConfig.pagination);
                     }, 100);
@@ -400,23 +451,6 @@
         });
     }
 
-    // Scroll active pagination into view
-    function scrollActivePaginationIntoView(paginationId) {
-        if (window.innerWidth <= 768) {
-            const pagination = document.getElementById(paginationId);
-            if (!pagination) return;
-            
-            const activePage = pagination.querySelector('.page-item.active');
-            if (activePage) {
-                activePage.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'nearest',
-                    inline: 'center'
-                });
-            }
-        }
-    }
-    
     // Helper function for debouncing
     function debounce(func, wait) {
         let timeout;

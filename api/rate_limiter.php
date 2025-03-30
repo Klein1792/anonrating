@@ -1,53 +1,87 @@
-
 <?php
-// Rate limiting configuration
-$rateLimit = 10000; // Max requests per minute
-$rateLimitWindow = 60; // Time window in seconds (1 minute)
+// filepath: e:\bakcup\xampp\htdocs\gamerating\api\rate_limiter.php
 
-// Get client IP address
-$clientIp = $_SERVER['REMOTE_ADDR'];
+/**
+ * Rate limiting functionality for the API
+ * 
+ * This file handles rate limiting for API requests to prevent abuse
+ */
 
-// Clean up old rate limit entries (older than the rate limit window)
-$db->query("DELETE FROM rate_limits WHERE last_request < NOW() - INTERVAL $rateLimitWindow SECOND");
-
-// Check rate limit for the current IP and endpoint
-$action = $_GET['action'] ?? '';
-$endpoint = $action ?: $_SERVER['REQUEST_URI'];
-$stmt = $db->prepare("SELECT request_count, last_request FROM rate_limits WHERE ip_address = ? AND endpoint = ?");
-$stmt->bind_param('ss', $clientIp, $endpoint);
-$stmt->execute();
-$result = $stmt->get_result();
-$rateLimitData = $result->fetch_assoc();
-$stmt->close();
-
-if ($rateLimitData) {
-    $requestCount = $rateLimitData['request_count'];
-    $lastRequest = strtotime($rateLimitData['last_request']);
-    $currentTime = time();
-
-    if ($currentTime - $lastRequest < $rateLimitWindow) {
-        if ($requestCount >= $rateLimit) {
-            http_response_code(429); // Too Many Requests
-            echo json_encode(['error' => 'Rate limit exceeded. Please try again later.']);
-            exit;
-        }
-        // Increment request count
-        $stmt = $db->prepare("UPDATE rate_limits SET request_count = request_count + 1, last_request = NOW() WHERE ip_address = ? AND endpoint = ?");
-        $stmt->bind_param('ss', $clientIp, $endpoint);
-        $stmt->execute();
-        $stmt->close();
-    } else {
-        // Reset count if the time window has expired
-        $stmt = $db->prepare("UPDATE rate_limits SET request_count = 1, last_request = NOW() WHERE ip_address = ? AND endpoint = ?");
-        $stmt->bind_param('ss', $clientIp, $endpoint);
-        $stmt->execute();
-        $stmt->close();
+/**
+ * Check if a request is within rate limits
+ */
+function checkRateLimit($db = null) {
+    // If no database connection is provided, skip rate limiting
+    if (!$db) {
+        return true;
     }
-} else {
-    // Insert new rate limit entry
-    $stmt = $db->prepare("INSERT INTO rate_limits (ip_address, endpoint, request_count, last_request) VALUES (?, ?, 1, NOW())");
-    $stmt->bind_param('ss', $clientIp, $endpoint);
+    
+    // Get client IP
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    
+    // Create the rate_limits table if it doesn't exist
+    $db->query("
+        CREATE TABLE IF NOT EXISTS rate_limits (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ip VARCHAR(45) NOT NULL,
+            endpoint VARCHAR(255) NOT NULL,
+            requests INT NOT NULL DEFAULT 1,
+            last_request TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX (ip, endpoint)
+        )
+    ");
+    
+    // Get current endpoint
+    $endpoint = $_GET['action'] ?? 'unknown';
+    
+    // Clean up old entries (older than 1 hour)
+    $db->query("DELETE FROM rate_limits WHERE last_request < DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+    
+    // Check if this IP has recent requests
+    $stmt = $db->prepare("SELECT id, requests, last_request FROM rate_limits WHERE ip = ? AND endpoint = ?");
+    $stmt->bind_param("ss", $ip, $endpoint);
     $stmt->execute();
-    $stmt->close();
+    $result = $stmt->get_result();
+    
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $id = $row['id'];
+        $requests = $row['requests'];
+        $lastRequest = strtotime($row['last_request']);
+        
+        // If last request is more than 1 minute ago, reset counter
+        if (time() - $lastRequest > 60) {
+            $db->query("UPDATE rate_limits SET requests = 1, last_request = NOW() WHERE id = $id");
+            return true;
+        }
+        
+        // Check if rate limit exceeded
+        if ($requests >= 60) { // 60 requests per minute
+            return false;
+        }
+        
+        // Increment request count
+        $db->query("UPDATE rate_limits SET requests = requests + 1, last_request = NOW() WHERE id = $id");
+        return true;
+    } else {
+        // First request from this IP for this endpoint
+        $stmt = $db->prepare("INSERT INTO rate_limits (ip, endpoint, requests) VALUES (?, ?, 1)");
+        $stmt->bind_param("ss", $ip, $endpoint);
+        $stmt->execute();
+        return true;
+    }
+}
+
+/**
+ * Return a rate limit exceeded error
+ */
+function returnRateLimitError() {
+    header('HTTP/1.1 429 Too Many Requests');
+    echo json_encode([
+        'success' => false,
+        'error' => 'Rate limit exceeded',
+        'message' => 'You have made too many requests in a short time period. Please try again later.'
+    ]);
+    exit;
 }
 ?>

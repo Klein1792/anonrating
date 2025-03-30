@@ -1,297 +1,574 @@
-/**
- * Auth Client - JavaScript interface for auth system
- * Supports refresh tokens and persistent sessions
- */
 (function() {
-    // Create namespaces
-    window.gameRating = window.gameRating || {};
-    window.gameRating.auth = window.gameRating.auth || {};
+    'use strict';
     
-    // Helper function to clear client-side auth data
-    function clearAuthClientSide() {
-        // Clear all possible auth cookies across multiple paths
-        const paths = ['/', '/gamerating', ''];
-        const cookiesToClear = ['access_token', 'refresh_token', 'PHPSESSID'];
+    // Initialize the global gameRating object if it doesn't exist
+    window.gameRating = window.gameRating || {};
+    
+    // Auth state
+    let isInitialized = false;
+    let isAuthenticated = false;
+    let isAnonymous = true;
+    let currentUser = null;
+    let tokenRefreshTimer = null;
+    
+    /**
+     * Initialize the authentication client
+     */
+    async function init() {
+        if (isInitialized) return;
         
-        paths.forEach(path => {
-            cookiesToClear.forEach(cookieName => {
-                document.cookie = `${cookieName}=; Path=${path}; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
-            });
-        });
+        // Check for existing access token
+        const accessToken = getCookie('access_token');
+        const refreshToken = getCookie('refresh_token');
+        const anonymousToken = getCookie('anonymous_token');
         
-        // Clear any storage items
-        try {
-            localStorage.removeItem('user_data');
-            localStorage.removeItem('access_token');
-            sessionStorage.removeItem('user_data');
-            sessionStorage.removeItem('access_token');
-        } catch (e) {
-            console.warn("Error clearing storage:", e);
+        if (accessToken) {
+            try {
+                // Verify token validity
+                const response = await fetch(`${window.baseUrl}/api.php?action=verifyToken`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Token is valid
+                    isAuthenticated = true;
+                    isAnonymous = false;
+                    currentUser = data.user;
+                    
+                    // Setup token refresh timer
+                    setupTokenRefresh();
+                    
+                    // Update UI
+                    updateAuthUI();
+                } else {
+                    // Token invalid, try to refresh
+                    await refreshAuthToken();
+                }
+            } catch (error) {
+                console.error('Error verifying token:', error);
+                // Try to refresh on error
+                await refreshAuthToken();
+            }
+        } else if (refreshToken) {
+            // Try to refresh using refresh token
+            await refreshAuthToken();
+        } else if (!anonymousToken) {
+            // Ensure anonymous token exists
+            await createAnonymousSession();
         }
         
-        console.log("Client-side auth data cleared");
+        isInitialized = true;
+        
+        // Update UI with current state
+        updateAuthUI();
+        
+        // Attach event listeners
+        attachLoginFormListeners();
+        attachRegisterFormListeners();
+        attachLogoutButtonListeners();
     }
     
-    // User object - syncs with PHP session
-    window.gameRating.auth.user = {
-        id: 0,
-        username: '',
-        isLoggedIn: false,
-        isAdmin: false,
-        isModerator: false,
-        tokenExpiry: null,
-        
-        // Initialize from server-provided data
-        init: function(userData) {
-            if (userData) {
-                this.id = parseInt(userData.id) || 0;
-                this.username = userData.username || '';
-                this.isLoggedIn = !!userData.isLoggedIn;
-                this.isAdmin = !!userData.isAdmin;
-                this.isModerator = !!userData.isModerator;
-                this.tokenExpiry = userData.tokenExpiry ? new Date(userData.tokenExpiry) : null;
-                
-                // Set permission level property
-                if (this.isAdmin) {
-                    this.permissionLevel = 'admin';
-                } else if (this.isModerator) {
-                    this.permissionLevel = 'moderator';
-                } else if (this.isLoggedIn) {
-                    this.permissionLevel = 'user';
-                } else {
-                    this.permissionLevel = 'guest';
-                }
-                
-                console.log(`Auth initialized: ${this.isLoggedIn ? this.username : 'Guest'} (${this.permissionLevel})`);
-                
-                // Update UI elements
-                this.updateUI();
-                
-                // Set up token expiry check if logged in
-                if (this.isLoggedIn && this.tokenExpiry) {
-                    this._setupTokenCheck();
-                }
-            }
-        },
-        
-        // Check if user has specified permission level
-        hasPermission: function(level) {
-            if (!this.isLoggedIn) return false;
-            
-            switch(level) {
-                case 'admin': return this.isAdmin;
-                case 'moderator': return this.isAdmin || this.isModerator;
-                case 'user': return true;
-                default: return false;
-            }
-        },
-        
-        // Check if user can modify a specific item
-        canModify: function(itemUserId) {
-            if (!this.isLoggedIn) return false;
-            if (this.isAdmin || this.isModerator) return true;
-            return this.id === parseInt(itemUserId);
-        },
-        
-        // CONSOLIDATED MASTER LOGOUT FUNCTION
-        logout: function() {
-            console.log("Auth client: Logout function called");
-            
-            // Use window.baseUrl with fallback
-            const apiUrl = `${window.baseUrl || ''}/api.php?action=logout`;
-            console.log("Logout API URL:", apiUrl);
-            
-            // Make API call to logout endpoint
-            fetch(apiUrl, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => {
-                console.log("Logout response status:", response.status);
-                
-                // Client-side cleanup regardless of server response
-                clearAuthClientSide();
-                
-                // Reset auth state
-                this.id = 0;
-                this.username = '';
-                this.isLoggedIn = false;
-                this.isAdmin = false;
-                this.isModerator = false;
-                this.tokenExpiry = null;
-                this.permissionLevel = 'guest';
-                
-                // Redirect to index page
-                console.log("Redirecting after logout...");
-                window.location.href = (window.baseUrl || '') + '/index.php';
-            })
-            .catch(error => {
-                console.error("Logout error:", error);
-                
-                // Still do client-side cleanup and redirect
-                clearAuthClientSide();
-                
-                // Reset auth state
-                this.id = 0;
-                this.username = '';
-                this.isLoggedIn = false;
-                this.isAdmin = false;
-                this.isModerator = false;
-                this.tokenExpiry = null;
-                this.permissionLevel = 'guest';
-                
-                window.location.href = (window.baseUrl || '') + '/index.php';
-            });
-            
-            return false; // Prevent default link action
-        },
-        
-        // Update UI elements based on auth status
-        updateUI: function() {
-            // Update login/logout link visibility
-            const loginEl = document.querySelector('.nav-login');
-            const logoutEl = document.querySelector('.nav-logout');
-            const userDisplayEl = document.querySelector('.user-display');
-            const adminLinkEl = document.querySelector('.nav-admin');
-            
-            if (loginEl) loginEl.style.display = this.isLoggedIn ? 'none' : 'block';
-            if (logoutEl) logoutEl.style.display = this.isLoggedIn ? 'block' : 'none';
-            
-            if (userDisplayEl && this.isLoggedIn) {
-                userDisplayEl.textContent = this.username;
-                userDisplayEl.style.display = 'block';
-            } else if (userDisplayEl) {
-                userDisplayEl.style.display = 'none';
-            }
-            
-            if (adminLinkEl) {
-                adminLinkEl.style.display = this.isAdmin ? 'block' : 'none';
-            }
-            
-            // Add/remove permission classes to body
-            document.body.classList.toggle('user-logged-in', this.isLoggedIn);
-            document.body.classList.toggle('user-admin', this.isAdmin);
-            document.body.classList.toggle('user-moderator', this.isModerator);
-            
-            // Dispatch event for other components
-            document.dispatchEvent(new CustomEvent('auth:updated', { 
-                detail: { user: this }
-            }));
-        },
-        
-        // Private: Setup token expiration check
-        _setupTokenCheck: function() {
-            if (!this.tokenExpiry) return;
-            
-            const now = new Date();
-            const expiresIn = this.tokenExpiry.getTime() - now.getTime();
-            
-            // Check if token is still valid
-            if (expiresIn <= 0) {
-                console.warn('Auth token expired, attempting refresh');
-                this._refreshToken();
-                return;
-            }
-            
-            // Schedule a check at halfway to expiration
-            const checkTime = Math.min(expiresIn / 2, 24 * 60 * 60 * 1000); // Max 1 day
-            
-            setTimeout(() => {
-                this._refreshToken();
-            }, checkTime);
-        },
-
-        // Add a new method to handle token refresh
-        _refreshToken: function() {
-            fetch(`${window.baseUrl || ''}/api.php?action=check_auth`, {
-                method: 'GET',
-                credentials: 'include'
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log("Auth check response:", data);
-                if (!data.authenticated) {
-                    // If server says we're not authenticated but we think we are,
-                    // this indicates the refresh token might also be invalid
-                    if (this.isLoggedIn) {
-                        console.warn("Session expired, redirecting to login");
-                        window.location.href = `${window.baseUrl || ''}/login.php`;
-                    }
-                } else if (data.token_refreshed) {
-                    // Server refreshed the token - reload to get new data
-                    console.log("Token refreshed, reloading page");
-                    window.location.reload();
-                } else {
-                    // Still authenticated, no refresh needed
-                    // Schedule next check
-                    this._setupTokenCheck();
-                }
-            })
-            .catch(error => {
-                console.error('Error checking auth status:', error);
-                // Still schedule next check even on error
-                setTimeout(() => this._setupTokenCheck(), 60 * 60 * 1000); // 1 hour
-            });
+    /**
+     * Set up a timer to refresh the token before it expires
+     */
+    function setupTokenRefresh() {
+        // Clear any existing timer
+        if (tokenRefreshTimer) {
+            clearTimeout(tokenRefreshTimer);
         }
-    };
-    
-    // Auth helper methods
-    window.gameRating.auth.helpers = {
-        // Get CSRF token
-        getCsrfToken: function() {
-            const meta = document.querySelector('meta[name="csrf-token"]');
-            return meta ? meta.getAttribute('content') : '';
-        },
         
-        // Enhanced fetch with authentication
-        fetchWithAuth: function(url, options = {}) {
-            const defaultOptions = {
-                credentials: 'include',
-                headers: {
-                    'X-CSRF-Token': this.getCsrfToken()
-                }
-            };
+        // Calculate when to refresh (5 minutes before expiry)
+        const token = parseJwt(getCookie('access_token'));
+        if (token && token.exp) {
+            const expiry = token.exp * 1000; // Convert to milliseconds
+            const now = Date.now();
+            const timeToRefresh = Math.max(0, expiry - now - (5 * 60 * 1000)); // 5 minutes before expiry
             
-            return fetch(url, {
-                ...defaultOptions,
-                ...options,
-                headers: {
-                    ...defaultOptions.headers,
-                    ...(options.headers || {})
-                }
-            });
+            // Set timer to refresh token
+            tokenRefreshTimer = setTimeout(refreshAuthToken, timeToRefresh);
         }
-    };
+    }
     
-    // Initialize on DOM content loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        // Look for user data in meta tag
+    /**
+     * Refresh the authentication token
+     */
+    async function refreshAuthToken() {
         try {
-            const userDataMeta = document.querySelector('meta[name="user-data"]');
-            if (userDataMeta) {
-                const userData = JSON.parse(atob(userDataMeta.content));
-                window.gameRating.auth.user.init(userData);
+            const response = await fetch(`${window.baseUrl}/api.php?action=refreshToken`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update auth state
+                isAuthenticated = true;
+                isAnonymous = false;
+                currentUser = data.user;
+                
+                // Setup token refresh timer
+                setupTokenRefresh();
+                
+                // Update UI
+                updateAuthUI();
+                
+                return true;
             } else {
-                window.gameRating.auth.user.init({
-                    isLoggedIn: false,
-                    permissionLevel: 'guest'
+                // Refresh failed
+                isAuthenticated = false;
+                isAnonymous = true;
+                currentUser = null;
+                
+                // Update UI
+                updateAuthUI();
+                
+                return false;
+            }
+        } catch (error) {
+            console.error('Error refreshing token:', error);
+            isAuthenticated = false;
+            isAnonymous = true;
+            currentUser = null;
+            
+            // Update UI
+            updateAuthUI();
+            
+            return false;
+        }
+    }
+    
+    /**
+     * Create an anonymous session for the user
+     */
+    async function createAnonymousSession() {
+        try {
+            // Call API to create anonymous token
+            const response = await fetch(`${window.baseUrl}/api.php?action=createAnonymousToken`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                isAnonymous = true;
+                return true;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error('Error creating anonymous session:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Update the UI based on authentication state
+     */
+    function updateAuthUI() {
+        // Find auth-related elements
+        const authSection = document.querySelector('#auth-section');
+        const userSection = document.querySelector('#user-section');
+        const usernameDisplay = document.querySelectorAll('.username-display');
+        const adminElements = document.querySelectorAll('.admin-only');
+        const modElements = document.querySelectorAll('.mod-only');
+        const authRequiredElements = document.querySelectorAll('.auth-required');
+        const nonAuthElements = document.querySelectorAll('.non-auth-only');
+        
+        if (!authSection && !userSection) return; // No auth UI elements on page
+        
+        if (isAuthenticated) {
+            // User is logged in
+            if (authSection) authSection.style.display = 'none';
+            if (userSection) userSection.style.display = 'block';
+            
+            // Update username display
+            if (usernameDisplay) {
+                usernameDisplay.forEach(el => {
+                    el.textContent = currentUser.username;
                 });
             }
-        } catch (e) {
-            console.error('Error initializing auth client:', e);
+            
+            // Show admin elements if the user is an admin
+            if (adminElements) {
+                adminElements.forEach(el => {
+                    el.style.display = currentUser.is_admin ? 'block' : 'none';
+                });
+            }
+            
+            // Show mod elements if the user is a mod or admin
+            if (modElements) {
+                modElements.forEach(el => {
+                    el.style.display = (currentUser.is_moderator || currentUser.is_admin) ? 'block' : 'none';
+                });
+            }
+            
+            // Show auth required elements
+            if (authRequiredElements) {
+                authRequiredElements.forEach(el => {
+                    el.style.display = '';
+                });
+            }
+            
+            // Hide non-auth elements
+            if (nonAuthElements) {
+                nonAuthElements.forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+        } else {
+            // User is not logged in
+            if (authSection) authSection.style.display = 'block';
+            if (userSection) userSection.style.display = 'none';
+            
+            // Hide admin/mod elements
+            if (adminElements) {
+                adminElements.forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+            
+            if (modElements) {
+                modElements.forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+            
+            // Hide auth required elements
+            if (authRequiredElements) {
+                authRequiredElements.forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+            
+            // Show non-auth elements
+            if (nonAuthElements) {
+                nonAuthElements.forEach(el => {
+                    el.style.display = '';
+                });
+            }
         }
         
-        // For backward compatibility - set global variables
-        window.isLoggedIn = function() { return window.gameRating.auth.user.isLoggedIn; };
-        window.isAdmin = function() { return window.gameRating.auth.user.isAdmin; };
-        window.isModerator = function() { return window.gameRating.auth.user.isModerator; };
-        window.isAdminOrModerator = function() { 
-            return window.gameRating.auth.user.isAdmin || window.gameRating.auth.user.isModerator; 
-        };
-        window.currentUserId = window.gameRating.auth.user.id;
-        window.logout = function() { return window.gameRating.auth.user.logout(); };
-    });
+        // Dispatch an event so other components can react
+        document.dispatchEvent(new CustomEvent('authStateChanged', {
+            detail: {
+                isAuthenticated,
+                isAnonymous,
+                user: currentUser
+            }
+        }));
+    }
+    
+    /**
+     * Attach event listeners to login form
+     */
+    function attachLoginFormListeners() {
+        const loginForm = document.querySelector('#login-form');
+        
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const username = loginForm.querySelector('#login-username').value;
+                const password = loginForm.querySelector('#login-password').value;
+                const remember = loginForm.querySelector('#login-remember')?.checked || false;
+                const errorMessage = loginForm.querySelector('.error-message');
+                
+                try {
+                    const response = await fetch(`${window.baseUrl}/api.php?action=login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password, remember })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Update auth state
+                        isAuthenticated = true;
+                        isAnonymous = false;
+                        currentUser = data.user;
+                        
+                        // Setup token refresh timer
+                        setupTokenRefresh();
+                        
+                        // Update UI
+                        updateAuthUI();
+                        
+                        // Redirect if needed
+                        const returnTo = new URLSearchParams(window.location.search).get('returnTo');
+                        if (returnTo) {
+                            window.location.href = returnTo;
+                        } else if (window.location.pathname === '/login.php') {
+                            window.location.href = '/index.php';
+                        }
+                    } else {
+                        // Show error message
+                        if (errorMessage) {
+                            errorMessage.textContent = data.error || 'An error occurred during login';
+                            errorMessage.style.display = 'block';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    if (errorMessage) {
+                        errorMessage.textContent = 'An error occurred. Please try again.';
+                        errorMessage.style.display = 'block';
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * Attach event listeners to register form
+     */
+    function attachRegisterFormListeners() {
+        const registerForm = document.querySelector('#register-form');
+        
+        if (registerForm) {
+            registerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const username = registerForm.querySelector('#register-username').value;
+                const email = registerForm.querySelector('#register-email').value;
+                const password = registerForm.querySelector('#register-password').value;
+                const confirmPassword = registerForm.querySelector('#register-confirm-password').value;
+                const errorMessage = registerForm.querySelector('.error-message');
+                
+                // Basic validation
+                if (password !== confirmPassword) {
+                    if (errorMessage) {
+                        errorMessage.textContent = 'Passwords do not match';
+                        errorMessage.style.display = 'block';
+                    }
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`${window.baseUrl}/api.php?action=register`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, email, password })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Update auth state
+                        isAuthenticated = true;
+                        isAnonymous = false;
+                        currentUser = data.user;
+                        
+                        // Setup token refresh timer
+                        setupTokenRefresh();
+                        
+                        // Update UI
+                        updateAuthUI();
+                        
+                        // Redirect if needed
+                        const returnTo = new URLSearchParams(window.location.search).get('returnTo');
+                        if (returnTo) {
+                            window.location.href = returnTo;
+                        } else if (window.location.pathname === '/register.php') {
+                            window.location.href = '/index.php';
+                        }
+                    } else {
+                        // Show error message
+                        if (errorMessage) {
+                            errorMessage.textContent = data.error || 'An error occurred during registration';
+                            errorMessage.style.display = 'block';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Registration error:', error);
+                    if (errorMessage) {
+                        errorMessage.textContent = 'An error occurred. Please try again.';
+                        errorMessage.style.display = 'block';
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * Attach event listeners to logout buttons
+     */
+    function attachLogoutButtonListeners() {
+        const logoutButtons = document.querySelectorAll('.logout-button');
+        
+        if (logoutButtons) {
+            logoutButtons.forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    await logout();
+                });
+            });
+        }
+    }
+    
+    /**
+     * Log out the current user
+     */
+    async function logout() {
+        try {
+            // First call logout API endpoint
+            const response = await fetch(`${window.baseUrl}/api.php?action=logout`, {
+                method: 'POST',
+                credentials: 'include' // Important for sending cookies
+            });
+            
+            // Manually clear cookies on the client side as well
+            document.cookie = 'access_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+            document.cookie = 'refresh_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+            document.cookie = 'access_token=; Path=/gamerating; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+            document.cookie = 'refresh_token=; Path=/gamerating; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+            
+            // Clear auth state
+            isAuthenticated = false;
+            isAnonymous = true;
+            currentUser = null;
+            
+            // Clear token refresh timer
+            if (tokenRefreshTimer) {
+                clearTimeout(tokenRefreshTimer);
+                tokenRefreshTimer = null;
+            }
+            
+            // Create new anonymous session
+            await createAnonymousSession();
+            
+            // Update UI
+            updateAuthUI();
+            
+            // Force page reload to ensure clean state
+            window.location.reload();
+            
+            return true;
+        } catch (error) {
+            console.error('Logout error:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Get the current auth token
+     * @returns {string|null} The auth token or null if not authenticated
+     */
+    function getAuthToken() {
+        return getCookie('access_token');
+    }
+    
+    /**
+     * Get the anonymous token
+     * @returns {string|null} The anonymous token or null if not available
+     */
+    function getAnonymousToken() {
+        return getCookie('anonymous_token');
+    }
+    
+    /**
+     * Fetch with auth token included
+     * @param {string} url - URL to fetch
+     * @param {object} options - Fetch options
+     * @returns {Promise} Fetch promise
+     */
+    async function fetchWithAuth(url, options = {}) {
+        const token = getAuthToken();
+        
+        // Clone options to avoid modifying the original
+        const fetchOptions = { ...options };
+        fetchOptions.headers = { ...fetchOptions.headers } || {};
+        
+        // Add auth header if token exists
+        if (token) {
+            fetchOptions.headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        // Add credentials for cookies
+        fetchOptions.credentials = 'same-origin';
+        
+        try {
+            let response = await fetch(url, fetchOptions);
+            
+            // If unauthorized and we have a refresh token, try to refresh and retry
+            if (response.status === 401 && getCookie('refresh_token')) {
+                const refreshSuccessful = await refreshAuthToken();
+                
+                if (refreshSuccessful) {
+                    // Get new token and retry request
+                    const newToken = getAuthToken();
+                    fetchOptions.headers['Authorization'] = `Bearer ${newToken}`;
+                    response = await fetch(url, fetchOptions);
+                }
+            }
+            
+            return response;
+        } catch (error) {
+            console.error('Error in fetchWithAuth:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Parse a JWT token
+     * @param {string} token - JWT token
+     * @returns {object|null} Parsed token payload or null if invalid
+     */
+    function parseJwt(token) {
+        if (!token) return null;
+        
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            
+            return JSON.parse(jsonPayload);
+        } catch (e) {
+            console.error('Error parsing JWT:', e);
+            return null;
+        }
+    }
+    
+    /**
+     * Get a cookie by name
+     * @param {string} name - Cookie name
+     * @returns {string|null} Cookie value or null if not found
+     */
+    function getCookie(name) {
+        const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+        return match ? decodeURIComponent(match[3]) : null;
+    }
+    
+    // Public API
+    window.gameRating.auth = {
+        init,
+        isAuthenticated: () => isAuthenticated,
+        isAnonymous: () => isAnonymous,
+        getCurrentUser: () => currentUser,
+        getAuthToken,
+        getAnonymousToken,
+        fetchWithAuth,
+        logout
+    };
+    
+    // Expose for backward compatibility
+    window.fetchWithAuth = window.gameRating.auth.fetchWithAuth;
+    window.getAuthToken = window.gameRating.auth.getAuthToken;
+    window.logout = window.gameRating.auth.logout;
+    
+    // Auto-initialize
+    document.addEventListener('DOMContentLoaded', init);
 })();

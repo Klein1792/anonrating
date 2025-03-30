@@ -94,11 +94,38 @@ $is_admin_or_moderator = hasPermission('moderator');
 
             <!-- Review Form -->
             <div class="game-review-form">
-                <h3>Submit a Review</h3>
-                <div id="symbol-challenge"></div>
-                <p id="challenge-status">Press the arrow keys to match the sequence above</p>
-                <textarea id="review-text" placeholder="Write your review here..." rows="5" cols="50"></textarea>
-                <button onclick="submitReview()" disabled id="submit-review-btn">Submit Review</button>
+                <h3>Write a Review</h3>
+                <form id="review-form">
+                    <div class="form-group">
+                        <label for="review-title">Title:</label>
+                        <input type="text" id="review-title" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="review-content">Review:</label>
+                        <textarea id="review-content" rows="5" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="review-rating">Rating:</label>
+                        <select id="review-rating" required>
+                            <?php for ($i = 10; $i >= 1; $i--): ?>
+                                <option value="<?php echo $i; ?>"><?php echo $i; ?>/10</option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="anonymous-name-field">
+                        <label for="anonymous-name">Post as:</label>
+                        <select id="anonymous-name" class="form-control">
+                            <option value="Anonymous" selected>Anonymous</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="submit" class="btn">Submit Review</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

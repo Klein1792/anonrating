@@ -1,473 +1,570 @@
 <?php
-function handleReviewActions($action, $db, $user_id = null) {
-    // Allow either session user_id or JWT user_id
-    $effectiveUserId = $user_id;
-    if (!$effectiveUserId && isset($_SESSION["user_id"])) {
-        $effectiveUserId = $_SESSION["user_id"];
+// filepath: e:\bakcup\xampp\htdocs\gamerating\api\reviews.php
+require_once __DIR__ . '/../includes/auth_helper.php';
+/**
+ * Handle all review-related API actions
+ * 
+ * @param string $action The API action
+ * @param object $db Database connection
+ * @return bool True if the action was handled
+ */
+function handleReviewActions($action, $db) {
+    switch ($action) {
+        case 'addReview':
+            return handleAddReview($db);
+            
+        case 'editReview':
+            return handleEditReview($db);
+            
+        case 'deleteReview':
+            return handleDeleteReview($db);
+            
+        case 'getReviewsByGame':
+            return handleGetReviewsByGame($db);
+            
+        case 'getRecentReviews':
+            return handleGetRecentReviews($db);
+            
+        default:
+            return false;
     }
+}
 
-    if ($action === 'get') {
-        $stmt = $db->prepare('SELECT r.*, u.username FROM reviews r LEFT JOIN users u ON r.user_id = u.id');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-        $reviews = [];
-        while ($row = $result->fetch_assoc()) {
-            $reviews[] = [
-                'id' => (int)$row['id'],
-                'gameName' => $row['gameName'],
-                'reviewText' => $row['reviewText'],
-                'votes' => (int)$row['votes'],
-                'verified' => (bool)$row['verified'],
-                'username' => $row['user_id'] ? $row['username'] : 'Anonymous'
-            ];
-        }
-        $stmt->close();
-        echo json_encode($reviews);
-        return true;
-    } elseif ($action === 'add' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['gameId']) || !isset($data['gameName']) || !isset($data['reviewText'])) {
-            echo json_encode(['status' => 'failed', 'error' => 'Invalid or missing data']);
-            return true;
-        }
+/**
+ * Handle adding a new review
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleAddReview($db) {
+    // Get review data from request
+    $data = json_decode(file_get_contents('php://input'), true);
     
-        $game_id = (int)$data['gameId'];
-        $session_id = session_id();
+    if (!$data) {
+        echo json_encode(['success' => false, 'error' => 'Invalid request data']);
+        return true;
+    }
     
-        // Check if the user (logged-in or anonymous) has voted on the game
-        $stmt = $db->prepare('SELECT COUNT(*) as count FROM game_votes WHERE game_id = ? AND (user_id = ? OR (user_id IS NULL AND session_id = ?))');
-        if (!$stmt) {
-            echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('iis', $game_id, $effectiveUserId, $session_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result()->fetch_assoc();
-        if ($result['count'] == 0) {
-            echo json_encode(['status' => 'failed', 'error' => 'You must like or dislike the game before reviewing']);
-            return true;
-        }
-        $stmt->close();
+    // Extract and validate review parameters
+    $gameId = isset($data['gameId']) ? (int)$data['gameId'] : 0;
+    $title = isset($data['title']) ? trim($data['title']) : '';
+    $content = isset($data['content']) ? trim($data['content']) : '';
+    $rating = isset($data['rating']) ? (int)$data['rating'] : 0;
+    $displayName = isset($data['displayName']) ? trim($data['displayName']) : 'Anonymous'; 
     
-        // Insert the review (user_id can be NULL for anonymous users)
-        $stmt = $db->prepare('INSERT INTO reviews (gameName, reviewText, votes, verified, user_id, session_id) VALUES (?, ?, 0, 0, ?, ?)');
-        if (!$stmt) {
-            echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('ssis', $data['gameName'], $data['reviewText'], $effectiveUserId, $session_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
-        echo json_encode(['status' => 'success']);
+    if (!$gameId || empty($title) || empty($content) || $rating < 1 || $rating > 10) {
+        echo json_encode(['success' => false, 'error' => 'Invalid review data']);
         return true;
-    } elseif ($action === 'upvote' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $review_id = isset($_GET['id']) ? (int)$_GET['id'] : -1;
-        $session_id = session_id();
-
-        // Check if the user (logged-in or anonymous) has already voted on this review
-        $stmt = $db->prepare('SELECT vote_type FROM review_votes WHERE review_id = ? AND (user_id = ? OR (user_id IS NULL AND session_id = ?))');
-        if (!$stmt) {
-            echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-            return true;
+    } 
+    // Get user identifier (registered user or anonymous)
+    $userIdentifier = getCurrentUserIdentifier();
+    
+    // Check if user already reviewed this game
+    $checkQuery = '';
+    $checkParams = [];
+    $checkTypes = '';
+    
+    if ($userIdentifier['type'] === 'user_id') {
+        $checkQuery = 'SELECT id FROM reviews WHERE game_id = ? AND user_id = ?';
+        $checkParams = [$gameId, $userIdentifier['value']];
+        $checkTypes = 'ii';
+    } else {
+        $anonymousToken = $userIdentifier['value'];
+        
+        // Ensure we have a valid anonymous token
+        if (!$anonymousToken) {
+            $anonymousUser = ensureAnonymousUser($db);
+            $anonymousToken = $anonymousUser['anonymous_token'];
         }
-        $stmt->bind_param('iis', $review_id, $effectiveUserId, $session_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-
-        $vote_change = 0;
-        if ($result->num_rows > 0) {
-            $existing_vote = $result->fetch_assoc()['vote_type'];
-            if ($existing_vote === 'upvote') {
-                echo json_encode(['status' => 'failed', 'error' => 'You have already upvoted this review']);
-                return true;
-            } else {
-                // User is changing their vote from downvote to upvote
-                $stmt = $db->prepare('UPDATE review_votes SET vote_type = "upvote" WHERE review_id = ? AND (user_id = ? OR (user_id IS NULL AND session_id = ?))');
-                if (!$stmt) {
-                    echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-                    return true;
-                }
-                $stmt->bind_param('iis', $review_id, $effectiveUserId, $session_id);
-                $vote_change = 2; // Downvote (-1) to upvote (+1) = +2
+        
+        $checkQuery = 'SELECT id FROM reviews WHERE game_id = ? AND anonymous_token = ?';
+        $checkParams = [$gameId, $anonymousToken];
+        $checkTypes = 'is';
+    }
+    
+    $stmt = $db->prepare($checkQuery);
+    $stmt->bind_param($checkTypes, ...$checkParams);
+    $stmt->execute();
+    
+    if ($stmt->get_result()->num_rows > 0) {
+        echo json_encode(['success' => false, 'error' => 'You have already reviewed this game']);
+        return true;
+    }
+    
+    try {
+        $db->begin_transaction();
+        
+        if ($userIdentifier['type'] === 'user_id') {
+            // Registered user - use their username
+            $userId = $userIdentifier['value'];
+            
+            // Get username
+            $userStmt = $db->prepare('SELECT username FROM users WHERE id = ?');
+            $userStmt->bind_param('i', $userId);
+            $userStmt->execute();
+            $userResult = $userStmt->get_result();
+            
+            if ($userResult->num_rows > 0) {
+                $displayName = $userResult->fetch_assoc()['username'];
             }
+            
+            // Insert review
+            $stmt = $db->prepare('
+                INSERT INTO reviews (game_id, user_id, display_name, title, content, rating) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            ');
+            $stmt->bind_param('iisssi', $gameId, $userId, $displayName, $title, $content, $rating);
         } else {
-            // User hasn’t voted yet, insert a new vote
-            $stmt = $db->prepare('INSERT INTO review_votes (review_id, vote_type, user_id, session_id) VALUES (?, "upvote", ?, ?)');
-            if (!$stmt) {
-                echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-                return true;
-            }
-            $stmt->bind_param('iis', $review_id, $effectiveUserId, $session_id);
-            $vote_change = 1; // New upvote = +1
-        }
-
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
-
-        // Update the review's vote count
-        $stmt = $db->prepare('UPDATE reviews SET votes = votes + ? WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('ii', $vote_change, $review_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
-
-        // Check if the review should be deleted
-        $stmt = $db->prepare('SELECT votes FROM reviews WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $review_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
-            if ($row['votes'] <= -5) {
-                $stmt = $db->prepare('DELETE FROM reviews WHERE id = ?');
-                if (!$stmt) {
-                    echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-                    return true;
-                }
-                $stmt->bind_param('i', $review_id);
-                if (!$stmt->execute()) {
-                    echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-                    return true;
-                }
-                $stmt->close();
-            }
-        } else {
-            $stmt->close();
-            echo json_encode(['status' => 'failed', 'error' => 'Review not found']);
-            return true;
-        }
-        $stmt->close();
-        echo json_encode(['status' => 'upvoted']);
-        return true;
-    } elseif ($action === 'downvote' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $review_id = isset($_GET['id']) ? (int)$_GET['id'] : -1;
-        $session_id = session_id();
-
-        // Check if the user (logged-in or anonymous) has already voted on this review
-        $stmt = $db->prepare('SELECT vote_type FROM review_votes WHERE review_id = ? AND (user_id = ? OR (user_id IS NULL AND session_id = ?))');
-        if (!$stmt) {
-            echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('iis', $review_id, $effectiveUserId, $session_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-
-        $vote_change = 0;
-        if ($result->num_rows > 0) {
-            $existing_vote = $result->fetch_assoc()['vote_type'];
-            if ($existing_vote === 'downvote') {
-                echo json_encode(['status' => 'failed', 'error' => 'You have already downvoted this review']);
-                return true;
-            } else {
-                // User is changing their vote from upvote to downvote
-                $stmt = $db->prepare('UPDATE review_votes SET vote_type = "downvote" WHERE review_id = ? AND (user_id = ? OR (user_id IS NULL AND session_id = ?))');
-                if (!$stmt) {
-                    echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-                    return true;
-                }
-                $stmt->bind_param('iis', $review_id, $effectiveUserId, $session_id);
-                $vote_change = -2; // Upvote (+1) to downvote (-1) = -2
-            }
-        } else {
-            // User hasn’t voted yet, insert a new vote
-            $stmt = $db->prepare('INSERT INTO review_votes (review_id, vote_type, user_id, session_id) VALUES (?, "downvote", ?, ?)');
-            if (!$stmt) {
-                echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-                return true;
-            }
-            $stmt->bind_param('iis', $review_id, $effectiveUserId, $session_id);
-            $vote_change = -1; // New downvote = -1
-        }
-
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
-
-        // Update the review's vote count
-        $stmt = $db->prepare('UPDATE reviews SET votes = votes + ? WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('ii', $vote_change, $review_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
-
-        // Check if the review should be deleted
-        $stmt = $db->prepare('SELECT votes FROM reviews WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $review_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
-            if ($row['votes'] <= -5) {
-                $stmt = $db->prepare('DELETE FROM reviews WHERE id = ?');
-                if (!$stmt) {
-                    echo json_encode(['status' => 'failed', 'error' => 'Prepare failed: ' . $db->error]);
-                    return true;
-                }
-                $stmt->bind_param('i', $review_id);
-                if (!$stmt->execute()) {
-                    echo json_encode(['status' => 'failed', 'error' => 'Execute failed: ' . $stmt->error]);
-                    return true;
-                }
-                $stmt->close();
-            }
-        } else {
-            $stmt->close();
-            echo json_encode(['status' => 'failed', 'error' => 'Review not found']);
-            return true;
-        }
-        $stmt->close();
-        echo json_encode(['status' => 'downvoted']);
-        return true;
-    } elseif ($action === 'checkReviewVote' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-        $review_id = isset($_GET['reviewId']) ? (int)$_GET['reviewId'] : -1;
-        $session_id = session_id();
-
-        $stmt = $db->prepare('SELECT vote_type FROM review_votes WHERE review_id = ? AND (user_id = ? OR (user_id IS NULL AND session_id = ?))');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('iis', $review_id, $effectiveUserId, $session_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-
-        if ($result->num_rows > 0) {
-            $vote = $result->fetch_assoc();
-            echo json_encode(['hasVoted' => true, 'voteType' => $vote['vote_type']]);
-        } else {
-            echo json_encode(['hasVoted' => false]);
-        }
-        $stmt->close();
-        return true;
-    } elseif ($action === 'verify' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Check if the user is an admin or moderator
-        if (!isset($effectiveUserId)) {
-            echo json_encode(['error' => 'Unauthorized: You must be logged in to verify reviews']);
-            return true;
-        }
-        $stmt = $db->prepare('SELECT is_admin, is_moderator FROM users WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $effectiveUserId);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-        if (!$result || $result->num_rows === 0) {
-            echo json_encode(['error' => 'Unauthorized: User not found']);
-            return true;
-        }
-        $user = $result->fetch_assoc();
-        $stmt->close();
-        if (!$user['is_admin'] && !$user['is_moderator']) {
-            echo json_encode(['error' => 'Unauthorized: You must be an admin or moderator to verify reviews']);
-            return true;
-        }
-
-        $id = isset($_GET['id']) ? (int)$_GET['id'] : -1;
-        $stmt = $db->prepare('UPDATE reviews SET verified = 1 WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $id);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
-        echo json_encode(['status' => 'verified']);
-        return true;
-    } elseif ($action === 'unverify' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Check if the user is an admin or moderator
-        if (!isset($effectiveUserId)) {
-            echo json_encode(['error' => 'Unauthorized: You must be logged in to unverify reviews']);
-            return true;
-        }
-        $stmt = $db->prepare('SELECT is_admin, is_moderator FROM users WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $effectiveUserId);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-        if (!$result || $result->num_rows === 0) {
-            echo json_encode(['error' => 'Unauthorized: User not found']);
-            return true;
-        }
-        $user = $result->fetch_assoc();
-        $stmt->close();
-        if (!$user['is_admin'] && !$user['is_moderator']) {
-            echo json_encode(['error' => 'Unauthorized: You must be an admin or moderator to unverify reviews']);
-            return true;
-        }
-
-        $id = isset($_GET['id']) ? (int)$_GET['id'] : -1;
-        $stmt = $db->prepare('UPDATE reviews SET verified = 0 WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $id);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
-        echo json_encode(['status' => 'unverified']);
-        return true;
-    } elseif ($action === 'delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Check if the user is logged in
-        if (!isset($effectiveUserId)) {
-            echo json_encode(['error' => 'Unauthorized: You must be logged in to delete reviews']);
-            return true;
+            // Anonymous user
+            $anonymousToken = $userIdentifier['value'];
+            
+            // Insert review
+            $stmt = $db->prepare('
+                INSERT INTO reviews (game_id, anonymous_token, display_name, title, content, rating) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            ');
+            $stmt->bind_param('issssi', $gameId, $anonymousToken, $displayName, $title, $content, $rating);
         }
         
-        // Get the review ID
-        $review_id = isset($_GET['id']) ? (int)$_GET['id'] : -1;
-        if ($review_id <= 0) {
-            echo json_encode(['error' => 'Invalid review ID']);
-            return true;
-        }
+        $stmt->execute();
+        $reviewId = $db->insert_id;
         
-        // Check if the user is an admin or moderator
-        $stmt = $db->prepare('SELECT is_admin, is_moderator FROM users WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $effectiveUserId);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-        if (!$result || $result->num_rows === 0) {
-            echo json_encode(['error' => 'Unauthorized: User not found']);
-            return true;
-        }
-        $user = $result->fetch_assoc();
-        $stmt->close();
+        // Update game rating statistics
+        updateGameRatingStats($db, $gameId);
         
-        // Get review information to check if user is the author (users can delete their own reviews)
-        $stmt = $db->prepare('SELECT user_id FROM reviews WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $review_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-        if (!$result || $result->num_rows === 0) {
-            echo json_encode(['error' => 'Review not found']);
-            return true;
-        }
-        $review = $result->fetch_assoc();
-        $stmt->close();
-        
-        // Check if user has permission to delete (admin, moderator, or review author)
-        $isAuthor = $review['user_id'] == $effectiveUserId;
-        $canDelete = $user['is_admin'] || $user['is_moderator'] || $isAuthor;
-        
-        if (!$canDelete) {
-            echo json_encode(['error' => 'Unauthorized: You do not have permission to delete this review']);
-            return true;
-        }
-        
-        // First delete any votes for this review to maintain database integrity
-        $stmt = $db->prepare('DELETE FROM review_votes WHERE review_id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $review_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Could not delete review votes: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
-        
-        // Now delete the review
-        $stmt = $db->prepare('DELETE FROM reviews WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $review_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Could not delete review: ' . $stmt->error]);
-            return true;
-        }
-        $stmt->close();
+        $db->commit();
         
         echo json_encode([
-            'status' => 'success',
-            'message' => 'Review deleted successfully'
+            'success' => true,
+            'message' => 'Review added successfully',
+            'review_id' => $reviewId
         ]);
+        
+    } catch (Exception $e) {
+        $db->rollback();
+        error_log('Error adding review: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Failed to add review: ' . $e->getMessage()]);
+    }
+    
+    return true;
+}
+
+/**
+ * Handle editing an existing review
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleEditReview($db) {
+    // Get review data from request
+    $data = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$data) {
+        echo json_encode(['success' => false, 'error' => 'Invalid request data']);
         return true;
     }
     
-    return false;
+    // Extract and validate review parameters
+    $reviewId = isset($data['reviewId']) ? (int)$data['reviewId'] : 0;
+    $title = isset($data['title']) ? trim($data['title']) : '';
+    $content = isset($data['content']) ? trim($data['content']) : '';
+    $rating = isset($data['rating']) ? (int)$data['rating'] : 0;
+    
+    if (!$reviewId || empty($title) || empty($content) || $rating < 1 || $rating > 10) {
+        echo json_encode(['success' => false, 'error' => 'Invalid review data']);
+        return true;
+    }
+    
+    // Get user identifier (registered user or anonymous)
+    $userIdentifier = getCurrentUserIdentifier();
+    
+    // Check if user owns this review or is admin/moderator
+    $ownerCheckQuery = 'SELECT game_id FROM reviews WHERE id = ? AND ';
+    $ownerParams = [$reviewId];
+    $ownerTypes = 'i';
+    
+    // For registered users
+    if ($userIdentifier['type'] === 'user_id') {
+        $userId = $userIdentifier['value'];
+        
+        // Check if user is admin or moderator
+        $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'];
+        $isModerator = isset($_SESSION['is_moderator']) && $_SESSION['is_moderator'];
+        
+        if ($isAdmin || $isModerator) {
+            // Admin/mod can edit any review, just check it exists
+            $ownerCheckQuery = 'SELECT game_id FROM reviews WHERE id = ?';
+        } else {
+            // Regular user can only edit their own reviews
+            $ownerCheckQuery .= 'user_id = ?';
+            $ownerParams[] = $userId;
+            $ownerTypes .= 'i';
+        }
+    } else {
+        // Anonymous user
+        $anonymousToken = $userIdentifier['value'];
+        
+        if (!$anonymousToken) {
+            echo json_encode(['success' => false, 'error' => 'No permission to edit this review']);
+            return true;
+        }
+        
+        $ownerCheckQuery .= 'anonymous_token = ?';
+        $ownerParams[] = $anonymousToken;
+        $ownerTypes .= 's';
+    }
+    
+    // Check ownership
+    $stmt = $db->prepare($ownerCheckQuery);
+    $stmt->bind_param($ownerTypes, ...$ownerParams);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        echo json_encode(['success' => false, 'error' => 'No permission to edit this review']);
+        return true;
+    }
+    
+    // Get game ID for rating update later
+    $gameId = (int)$result->fetch_assoc()['game_id'];
+    
+    try {
+        $db->begin_transaction();
+        
+        // Update the review
+        $stmt = $db->prepare('
+            UPDATE reviews 
+            SET title = ?, content = ?, rating = ?, updated_at = NOW()
+            WHERE id = ?
+        ');
+        $stmt->bind_param('ssii', $title, $content, $rating, $reviewId);
+        $stmt->execute();
+        
+        // Update game rating statistics
+        updateGameRatingStats($db, $gameId);
+        
+        $db->commit();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Review updated successfully',
+            'review_id' => $reviewId
+        ]);
+        
+    } catch (Exception $e) {
+        $db->rollback();
+        error_log('Error updating review: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Failed to update review: ' . $e->getMessage()]);
+    }
+    
+    return true;
 }
+
+/**
+ * Handle deleting a review
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleDeleteReview($db) {
+    // Get review ID from request
+    $data = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$data) {
+        echo json_encode(['success' => false, 'error' => 'Invalid request data']);
+        return true;
+    }
+    
+    $reviewId = isset($data['reviewId']) ? (int)$data['reviewId'] : 0;
+    
+    if (!$reviewId) {
+        echo json_encode(['success' => false, 'error' => 'Invalid review ID']);
+        return true;
+    }
+    
+    // Get user identifier (registered user or anonymous)
+    $userIdentifier = getCurrentUserIdentifier();
+    
+    // Check if user owns this review or is admin/moderator
+    $ownerCheckQuery = 'SELECT game_id FROM reviews WHERE id = ? AND ';
+    $ownerParams = [$reviewId];
+    $ownerTypes = 'i';
+    
+    // For registered users
+    if ($userIdentifier['type'] === 'user_id') {
+        $userId = $userIdentifier['value'];
+        
+        // Check if user is admin or moderator
+        $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'];
+        $isModerator = isset($_SESSION['is_moderator']) && $_SESSION['is_moderator'];
+        
+        if ($isAdmin || $isModerator) {
+            // Admin/mod can delete any review, just check it exists
+            $ownerCheckQuery = 'SELECT game_id FROM reviews WHERE id = ?';
+        } else {
+            // Regular user can only delete their own reviews
+            $ownerCheckQuery .= 'user_id = ?';
+            $ownerParams[] = $userId;
+            $ownerTypes .= 'i';
+        }
+    } else {
+        // Anonymous user
+        $anonymousToken = $userIdentifier['value'];
+        
+        if (!$anonymousToken) {
+            echo json_encode(['success' => false, 'error' => 'No permission to delete this review']);
+            return true;
+        }
+        
+        $ownerCheckQuery .= 'anonymous_token = ?';
+        $ownerParams[] = $anonymousToken;
+        $ownerTypes .= 's';
+    }
+    
+    // Check ownership
+    $stmt = $db->prepare($ownerCheckQuery);
+    $stmt->bind_param($ownerTypes, ...$ownerParams);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        echo json_encode(['success' => false, 'error' => 'No permission to delete this review']);
+        return true;
+    }
+    
+    // Get game ID for rating update later
+    $gameId = (int)$result->fetch_assoc()['game_id'];
+    
+    try {
+        $db->begin_transaction();
+        
+        // Delete the review
+        $stmt = $db->prepare('DELETE FROM reviews WHERE id = ?');
+        $stmt->bind_param('i', $reviewId);
+        $stmt->execute();
+        
+        // Also delete associated votes
+        $stmt = $db->prepare('DELETE FROM review_votes WHERE review_id = ?');
+        $stmt->bind_param('i', $reviewId);
+        $stmt->execute();
+        
+        // Update game rating statistics
+        updateGameRatingStats($db, $gameId);
+        
+        $db->commit();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Review deleted successfully'
+        ]);
+        
+    } catch (Exception $e) {
+        $db->rollback();
+        error_log('Error deleting review: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Failed to delete review: ' . $e->getMessage()]);
+    }
+    
+    return true;
+}
+
+/**
+ * Handle retrieving reviews for a specific game
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleGetReviewsByGame($db) {
+    $gameId = isset($_GET['gameId']) ? (int)$_GET['gameId'] : 0;
+    
+    if (!$gameId) {
+        echo json_encode(['success' => false, 'error' => 'Invalid game ID']);
+        return true;
+    }
+    
+    // Pagination parameters
+    $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+    $limit = isset($_GET['limit']) ? min(50, max(1, (int)$_GET['limit'])) : 10;
+    $offset = ($page - 1) * $limit;
+    
+    // Sorting parameters
+    $sortField = isset($_GET['sortField']) ? $_GET['sortField'] : 'created_at';
+    $sortDirection = isset($_GET['sortDirection']) ? $_GET['sortDirection'] : 'DESC';
+    
+    // Validate sort field to prevent SQL injection
+    $allowedSortFields = ['created_at', 'rating', 'helpful_votes'];
+    if (!in_array($sortField, $allowedSortFields)) {
+        $sortField = 'created_at';
+    }
+    
+    // Validate sort direction
+    $sortDirection = strtoupper($sortDirection) === 'ASC' ? 'ASC' : 'DESC';
+    
+    // Get reviews
+    $stmt = $db->prepare("
+        SELECT r.*, u.username, u.is_admin, u.is_moderator
+        FROM reviews r
+        LEFT JOIN users u ON r.user_id = u.id
+        WHERE r.game_id = ?
+        ORDER BY r.$sortField $sortDirection
+        LIMIT ?, ?
+    ");
+    
+    $stmt->bind_param('iii', $gameId, $offset, $limit);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    // Get total reviews count for pagination
+    $countStmt = $db->prepare('SELECT COUNT(*) as total FROM reviews WHERE game_id = ?');
+    $countStmt->bind_param('i', $gameId);
+    $countStmt->execute();
+    $totalReviews = (int)$countStmt->get_result()->fetch_assoc()['total'];
+    
+    // Get user identifier for checking ownership
+    $userIdentifier = getCurrentUserIdentifier();
+    
+    $reviews = [];
+    while ($row = $result->fetch_assoc()) {
+        // Determine if the current user can edit/delete this review
+        $canEdit = false;
+        $canDelete = false;
+        
+        if ($userIdentifier['type'] === 'user_id') {
+            // Registered user
+            $userId = $userIdentifier['value'];
+            $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'];
+            $isModerator = isset($_SESSION['is_moderator']) && $_SESSION['is_moderator'];
+            
+            $isOwner = $row['user_id'] && (int)$row['user_id'] === (int)$userId;
+            $canEdit = $isOwner || $isAdmin || $isModerator;
+            $canDelete = $isOwner || $isAdmin || $isModerator;
+        } else {
+            // Anonymous user
+            $anonymousToken = $userIdentifier['value'];
+            $isOwner = $row['anonymous_token'] && $row['anonymous_token'] === $anonymousToken;
+            $canEdit = $isOwner;
+            $canDelete = $isOwner;
+        }
+        
+        // Format the review data
+        $reviewData = [
+            'id' => (int)$row['id'],
+            'game_id' => (int)$row['game_id'],
+            'user_id' => $row['user_id'] ? (int)$row['user_id'] : null,
+            'display_name' => $row['username'] ?? $row['display_name'],
+            'is_anonymous' => !$row['user_id'],
+            'is_admin' => (bool)($row['is_admin'] ?? false),
+            'is_moderator' => (bool)($row['is_moderator'] ?? false),
+            'title' => $row['title'],
+            'content' => $row['content'],
+            'rating' => (int)$row['rating'],
+            'helpful_votes' => (int)$row['helpful_votes'],
+            'not_helpful_votes' => (int)$row['not_helpful_votes'],
+            'created_at' => $row['created_at'],
+            'updated_at' => $row['updated_at'],
+            'can_edit' => $canEdit,
+            'can_delete' => $canDelete
+        ];
+        
+        $reviews[] = $reviewData;
+    }
+    
+    echo json_encode([
+        'success' => true,
+        'reviews' => $reviews,
+        'pagination' => [
+            'current_page' => $page,
+            'total_pages' => ceil($totalReviews / $limit),
+            'total_reviews' => $totalReviews,
+            'per_page' => $limit
+        ]
+    ]);
+    
+    return true;
+}
+
+/**
+ * Get recent reviews across all games
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleGetRecentReviews($db) {
+    // Pagination parameters
+    $limit = isset($_GET['limit']) ? min(50, max(1, (int)$_GET['limit'])) : 10;
+    
+    $stmt = $db->prepare("
+        SELECT r.*, g.name as game_name, g.cover_url, u.username, u.is_admin, u.is_moderator
+        FROM reviews r
+        JOIN games g ON r.game_id = g.id
+        LEFT JOIN users u ON r.user_id = u.id
+        ORDER BY r.created_at DESC
+        LIMIT ?
+    ");
+    
+    $stmt->bind_param('i', $limit);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $reviews = [];
+    while ($row = $result->fetch_assoc()) {
+        // Format the review data
+        $reviewData = [
+            'id' => (int)$row['id'],
+            'game_id' => (int)$row['game_id'],
+            'game_name' => $row['game_name'],
+            'cover_url' => $row['cover_url'],
+            'user_id' => $row['user_id'] ? (int)$row['user_id'] : null,
+            'display_name' => $row['username'] ?? $row['display_name'],
+            'is_anonymous' => !$row['user_id'],
+            'is_admin' => (bool)($row['is_admin'] ?? false),
+            'is_moderator' => (bool)($row['is_moderator'] ?? false),
+            'title' => $row['title'],
+            'content' => $row['content'],
+            'rating' => (int)$row['rating'],
+            'helpful_votes' => (int)$row['helpful_votes'],
+            'not_helpful_votes' => (int)$row['not_helpful_votes'],
+            'created_at' => $row['created_at'],
+            'updated_at' => $row['updated_at']
+        ];
+        
+        $reviews[] = $reviewData;
+    }
+    
+    echo json_encode([
+        'success' => true,
+        'reviews' => $reviews
+    ]);
+    
+    return true;
+}
+
+/**
+ * Update the average rating and review count for a game
+ * 
+ * @param object $db Database connection
+ * @param int $gameId Game ID
+ * @return void
+ */
+function updateGameRatingStats($db, $gameId) {
+    $stmt = $db->prepare('
+        SELECT AVG(rating) as avg_rating, COUNT(*) as count
+        FROM reviews
+        WHERE game_id = ?
+    ');
+    $stmt->bind_param('i', $gameId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $stats = $result->fetch_assoc();
+    
+    // Update game table
+    $stmt = $db->prepare('
+        UPDATE games
+        SET avg_rating = ?, review_count = ?, last_rating_update = NOW()
+        WHERE id = ?
+    ');
+    $avgRating = $stats['avg_rating'] ? round($stats['avg_rating'], 1) : 0;
+    $reviewCount = (int)$stats['count'];
+    $stmt->bind_param('dii', $avgRating, $reviewCount, $gameId);
+    $stmt->execute();
+}
+

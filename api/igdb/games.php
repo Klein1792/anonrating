@@ -181,6 +181,8 @@ function fetchGames($client_id, $client_secret, $token_file, $db) {
     $genre = $_GET['genre'] ?? '';
     $platform = $_GET['platform'] ?? '';
 
+    $allowedSortFields = ['created_at', 'first_release_date', 'rating', 'likes', 'approval', 'avg_rating'];
+
     $result = $db->query('SELECT last_fetched FROM fetch_log ORDER BY last_fetched DESC LIMIT 1');
     if (!$result) {
         error_log("Failed to fetch last_fetched: " . $db->error);
@@ -199,7 +201,8 @@ function fetchGames($client_id, $client_secret, $token_file, $db) {
         }
     }
 
-    $query = 'SELECT id, name, first_release_date, cover_url, details FROM games';
+    // Update the SQL query to include avg_rating and review_count AND vote data
+    $query = 'SELECT id, name, first_release_date, cover_url, details, avg_rating, review_count, likes, dislikes, approval_percent FROM games';
     $conditions = [];
     $params = [];
     $types = '';
@@ -236,12 +239,43 @@ function fetchGames($client_id, $client_secret, $token_file, $db) {
         $query .= ' WHERE ' . implode(' AND ', $conditions);
     }
 
+    // Define base columns that should always be included
+    $baseColumns = "id, name, first_release_date, cover_url, details, avg_rating, review_count, likes, dislikes, approval_percent";
+
     // Sort by rating or release date in SQL
     if ($sort === 'rating') {
-        // Use COALESCE to treat NULL ratings as 0, CAST to ensure numeric sorting, and add secondary sort by first_release_date
-        $query = "SELECT id, name, first_release_date, cover_url, details, CAST(COALESCE(JSON_EXTRACT(details, '$.rating'), 0) AS DECIMAL(10,2)) as rating_value FROM games" . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '') . " ORDER BY rating_value $sortDirection, first_release_date DESC";
+        // Add rating_value for sorting but keep all base columns
+        $query = "SELECT $baseColumns, CAST(COALESCE(JSON_EXTRACT(details, '$.rating'), 0) AS DECIMAL(10,2)) as rating_value FROM games" 
+            . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '') 
+            . " ORDER BY rating_value $sortDirection, first_release_date DESC";
+    } else if ($sort === 'avg_rating') {
+        // Use existing columns but maintain consistent order
+        $query = "SELECT $baseColumns FROM games" 
+            . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '') 
+            . " ORDER BY COALESCE(avg_rating, 0) $sortDirection, review_count DESC, name ASC";
+    } else if ($sort === 'likes' || $sort === 'approval') {
+        // Sort by approval_percent
+        $query = "SELECT $baseColumns FROM games" 
+            . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '') 
+            . " ORDER BY approval_percent $sortDirection, (likes + dislikes) DESC, name ASC";
+        
+        // Debug the approval sort
+        error_log("Approval sort query: $query with direction $sortDirection");
+    } else if ($sort === 'name') {
+        // Sort alphabetically
+        $query = "SELECT $baseColumns FROM games"
+            . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '')
+            . " ORDER BY name $sortDirection";
+    } else if ($sort === 'release' || $sort === 'first_release_date') {
+        // Sort by release date
+        $query = "SELECT $baseColumns FROM games"
+            . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '')
+            . " ORDER BY first_release_date $sortDirection, name ASC";
     } else {
-        $query .= " ORDER BY first_release_date $sortDirection";
+        // Default sort (usually rating)
+        $query = "SELECT $baseColumns, CAST(COALESCE(JSON_EXTRACT(details, '$.rating'), 0) AS DECIMAL(10,2)) as rating_value FROM games" 
+            . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '')
+            . " ORDER BY rating_value $sortDirection, first_release_date DESC";
     }
 
     error_log("Query: $query, Params: " . json_encode($params));
@@ -266,6 +300,13 @@ function fetchGames($client_id, $client_secret, $token_file, $db) {
             error_log("Invalid JSON in details for game ID {$row['id']}: " . $row['details']);
             $details = [];
         }
+        
+        // Get vote data from games table
+        $likes = isset($row['likes']) ? (int)$row['likes'] : 0;
+        $dislikes = isset($row['dislikes']) ? (int)$row['dislikes'] : 0;
+        $totalVotes = $likes + $dislikes;
+        $approvalPercent = isset($row['approval_percent']) ? (float)$row['approval_percent'] : 0;
+        
         $game = [
             'id' => (int)$row['id'],
             'name' => $row['name'],
@@ -273,34 +314,21 @@ function fetchGames($client_id, $client_secret, $token_file, $db) {
             'cover' => ['url' => $row['cover_url']],
             'rating' => isset($details['rating']) ? (float)$details['rating'] : null,
             'genres' => $details['genres'] ?? [],
-            'platforms' => $details['platforms'] ?? []
+            'platforms' => $details['platforms'] ?? [],
+            // Add these fields for average rating
+            'avg_rating' => isset($row['avg_rating']) ? (float)$row['avg_rating'] : null,
+            'review_count' => isset($row['review_count']) ? (int)$row['review_count'] : 0,
+            // Add these fields for likes/dislikes
+            'likes' => $likes,
+            'dislikes' => $dislikes,
+            'total_votes' => $totalVotes,
+            'approval_percent' => $approvalPercent
         ];
+        
         $games[] = $game;
         error_log("Game ID {$game['id']}: Name: {$game['name']}, Rating: " . ($game['rating'] ?? 'N/A'));
     }
     $stmt->close();
-
-    // Fetch likes for each game if sorting by likes
-    if ($sort === 'likes') {
-        foreach ($games as &$game) {
-            $stmt = $db->prepare('SELECT COUNT(*) as likes FROM game_votes WHERE game_id = ? AND vote_type = "like"');
-            if ($stmt) {
-                $stmt->bind_param('i', $game['id']);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                $game['likes'] = $result->fetch_assoc()['likes'] ?? 0;
-                $stmt->close();
-            } else {
-                $game['likes'] = 0;
-            }
-        }
-        unset($game); // Unset reference
-
-        // Sort games by likes in PHP
-        usort($games, function($a, $b) use ($sortDirection) {
-            return $sortDirection === 'DESC' ? $b['likes'] - $a['likes'] : $a['likes'] - $b['likes'];
-        });
-    }
 
     // Calculate total before pagination
     $totalQuery = 'SELECT COUNT(*) as total FROM games' . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '');
