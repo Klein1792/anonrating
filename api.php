@@ -34,6 +34,7 @@ try {
     require_once 'api/igdb.php';
     require_once 'api/voting.php';
     require_once 'api/reviews.php';
+    require_once 'api/stats.php';
     // Start session if not already started
     if (session_status() === PHP_SESSION_NONE) {
         session_start();

@@ -85,7 +85,7 @@ textarea, input[type="text"], input[type="password"], select {
     width: 100%;
     background: #222;
     color: #00ff00;
-    border: 2px solid #ff00ff;
+    border: 2px solid #800080;
     padding: 10px;
     margin-bottom: 10px;
     font-family: 'Courier New', Courier, monospace;
@@ -131,4 +131,152 @@ tr:hover {
     h2 { font-size: 1.3rem; }
     h3 { font-size: 1.1rem; }
     input, select, button { font-size: 16px; padding: 14px 10px; }
+}
+
+/* Notification container */
+.notifications-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Individual notification */
+.notification {
+    background-color: rgba(17, 17, 17, 0.9);
+    border: 2px solid #ff00ff;
+    color: #00ff00;
+    padding: 10px 15px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+/* Show animation */
+.notification.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Hide animation */
+.notification.hiding {
+    opacity: 0;
+    transform: translateX(100%);
+}
+
+/* Notification types */
+.notification.info {
+    border-color: #00ffff;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.notification.success {
+    border-color: #00ff00;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.notification.error {
+    border-color: #ff0000;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+}
+
+/* Close Ascendant text */
+.notification-content {
+    flex: 1;
+}
+
+/* Close button */
+.notification-close {
+    background: none;
+    border: none;
+    color: #ff00ff;
+    cursor: pointer;
+    font-size: 16px;
+    margin-left: 10px;
+    transition: color 0.2s;
+}
+
+.notification-close:hover {
+    color: #ff0000;
+}
+/* Confirmation dialog */
+.confirm-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.confirm-dialog-content {
+    background-color: #111;
+    border: 2px solid #ff00ff;
+    box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    font-family: 'Courier New', Courier, monospace;
+    color: #00ff00;
+    max-width: 400px;
+    width: 90%;
+}
+
+.confirm-dialog-content p {
+    margin: 0 0 20px;
+    font-size: 16px;
+}
+
+.confirm-dialog-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.confirm-dialog-buttons button {
+    background-color: rgba(0, 0, 0, 0.7);
+    border: 2px solid;
+    padding: 8px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+#confirm-yes {
+    color: #ff0000;
+    border-color: #ff0000;
+}
+
+#confirm-yes:hover {
+    background-color: #ff0000;
+    color: #000;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+}
+
+#confirm-no {
+    color: #00ff00;
+    border-color: #00ff00;
+}
+
+#confirm-no:hover {
+    background-color: #00ff00;
+    color: #000;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
 }

@@ -11,13 +11,8 @@
     z-index: 1000;
     padding: 0; /* Remove extra padding */
     box-sizing: border-box;
-    height: 67.59px; /* Set height to match header-main */
+    height: 67.59px; /* Set height for desktop */
 }
-
-/* Remove this problematic selector */
-/* body:has(.konami-container) .header-container {
-    top: 40px;
-} */
 
 /* Header main content */
 .header-main {
@@ -114,11 +109,14 @@
 @media (max-width: 768px) {
     .header-container {
         padding: 5px;
+        height: auto; /* Allow the header to grow with content */
     }
     
     .header-main {
         flex-direction: column;
         align-items: center;
+        padding: 10px 5px;
+        height: auto; /* Allow the header-main to grow with content */
     }
     
     .site-branding {
@@ -143,9 +141,15 @@
     }
     
     #status {
+        position: static; /* Remove absolute positioning on mobile */
+        transform: none; /* Remove transform */
+        left: auto;
+        bottom: auto;
         width: 100%;
         text-align: center;
         font-size: 0.8rem;
         padding: 3px 5px;
+        background-color: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
     }
 }

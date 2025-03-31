@@ -5,31 +5,42 @@
     padding: 0 10px;
 }
 
-/* Game header structure */
+/* Containers with shared background and border */
+.game-header, .game-meta, .game-description, .game-review-form, .review-item, .game-trailer {
+    background-color: #111;
+    border: 2px solid #013441;
+}
+
+/* Game header specific styles */
 .game-header {
     display: flex;
     gap: 20px;
     margin-bottom: 20px;
-    background-color: #111;
-    border: 2px solid #ff00ff;
     padding: 15px;
-    min-height: 300px; /* Set a minimum height for the entire header */
+    min-height: 300px;
 }
 
-/* Video section */
-.game-header-video {
+/* Flex sections with shared properties */
+.game-header-video, .game-header-image, .game-header-info {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    height: auto; /* Let height be determined by content */
+}
+
+/* Specific flex section adjustments */
+.game-header-video, .game-header-info {
+    height: auto;
+}
+
+.game-header-image {
+    flex-direction: column;
 }
 
 .game-trailer {
     width: 100%;
-    height: 300px; /* Increased height to match game-meta content */
-    border: 2px solid #ff00ff;
-    box-shadow: 0 0 10px #ff00ff;
+    height: 300px;
+    box-shadow: 0 0 10px #0d9fc4;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -41,56 +52,45 @@
     height: 100%;
 }
 
-.game-trailer p {
-    color: #ff00ff;
-    margin: 0;
+.game-trailer p, .game-description, .game-rating {
+    color: lightgray;
 }
 
-/* Cover Image section (center) */
-.game-header-image {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+.game-trailer p {
+    margin: 0;
 }
 
 .game-header-image img {
     width: 100%;
     max-width: 300px;
     height: 300px;
-    object-fit:cover;
+    object-fit: cover;
     border-radius: 10px;
     border: 2px solid #00ff00;
     box-shadow: 0 0 10px #00ff00;
 }
 
-.game-header-image h1 {
+.game-header-image h1, .game-reviews h2, .game-review-form h3 {
     color: #00ff00;
     text-shadow: 2px 2px #ff00ff;
+}
+
+.game-header-image h1 {
     margin: 10px 0;
     font-size: 24px;
     text-align: center;
 }
 
-/* Game info section */
 .game-header-info {
-    flex: 1;
-    display: flex;
-    align-items: flex-start; /* Align to the top */
-    justify-content: center;
-    height: auto; /* Let height be determined by content */
+    align-items: flex-start;
 }
 
 .game-meta {
-    border: 2px solid #ff00ff;
-    background-color: #111;
     padding: 15px;
-    color: #ff00ff;
     font-size: 14px;
     text-align: left;
     width: 100%;
-    min-height: 300px; /* Minimum height to match trailer */
+    min-height: 300px;
     box-sizing: border-box;
     overflow-y: auto;
     max-width: 300px;
@@ -98,6 +98,10 @@
     white-space: normal;
     display: flex;
     flex-direction: column;
+}
+
+.meta-item {
+    margin: 5px 0;
 }
 
 .meta-item a {
@@ -108,10 +112,6 @@
 .meta-item a:hover {
     color: #ff00ff;
     text-decoration: underline;
-}
-
-.meta-item {
-    margin: 5px 0;
 }
 
 .meta-item strong {
@@ -125,11 +125,8 @@
 }
 
 .game-description {
-    border: 2px solid #ff00ff;
-    background-color: #111;
     padding: 15px;
     margin-bottom: 20px;
-    color: #ff00ff;
     font-size: 14px;
     text-align: left;
 }
@@ -138,17 +135,9 @@
     margin-bottom: 20px;
 }
 
-.game-reviews h2 {
-    color: #00ff00;
-    text-shadow: 2px 2px #ff00ff;
-}
-
 .review-item {
-    border: 2px solid #ff00ff;
-    background-color: #111;
     padding: 10px;
     margin-bottom: 10px;
-    color: #ff00ff;
     text-align: left;
 }
 
@@ -157,23 +146,14 @@
 }
 
 .game-review-form {
-    border: 2px solid #ff00ff;
-    background-color: #111;
     padding: 20px;
 }
 
-.game-review-form h3 {
-    color: #00ff00;
-    text-shadow: 2px 2px #ff00ff;
-}
-
 .game-rating {
-    color: #ff00ff;
     font-size: 14px;
     margin-bottom: 10px;
 }
 
-/* Bootstrap pagination styles for game.php (replacing old #pagination styles) */
 .pagination {
     margin-top: 20px;
     justify-content: center;
@@ -189,13 +169,7 @@
     font-family: 'Courier New', Courier, monospace;
 }
 
-.page-item .page-link:hover {
-    background-color: #ff00ff;
-    color: #000;
-    border-color: #ff00ff;
-}
-
-.page-item.active .page-link {
+.page-item .page-link:hover, .page-item.active .page-link {
     background-color: #ff00ff;
     color: #000;
     border-color: #ff00ff;
@@ -213,18 +187,16 @@
         align-items: center;
         gap: 10px;
         padding: 10px;
-        min-height: auto; /* Remove minimum height on mobile */
+        min-height: auto;
     }
 
-    .game-header-video,
-    .game-header-image,
-    .game-header-info {
+    .game-header-video, .game-header-image, .game-header-info {
         width: 100%;
         max-width: 100%;
     }
 
     .game-trailer {
-        height: 150px; /* Smaller height on mobile */
+        height: 150px;
     }
 
     .game-header-image img {
@@ -238,24 +210,19 @@
 
     .game-meta {
         max-width: 100%;
-        height: auto; /* Auto height on mobile */
-        max-height: 200px; /* But with a max height */
+        height: auto;
+        max-height: 200px;
         font-size: 12px;
         padding: 10px;
     }
 
-    .game-description {
+    .game-description, .review-item {
         font-size: 12px;
         padding: 10px;
     }
 
     .game-reviews h2 {
         font-size: 18px;
-    }
-
-    .review-item {
-        font-size: 12px;
-        padding: 8px;
     }
 
     .game-review-form {
@@ -276,114 +243,7 @@
     }
 }
 
-/* Enhanced button styling */
-.vote-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    margin: 15px 0;
-}
-
-.vote-buttons button {
-    background-color: rgba(0, 0, 0, 0.7);
-    border: 2px solid;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: bold;
-    padding: 5px 15px;
-    transition: all 0.2s;
-    cursor: pointer;
-    font-family: 'Courier New', monospace;
-    min-width: 80px;
-}
-
-/* Like button */
-#like-button-[id] {
-    color: #00ff00;
-    border-color: #00ff00;
-}
-
-#like-button-[id]:hover:not(:disabled) {
-    background-color: #00ff00;
-    color: #000;
-}
-
-#like-button-[id]:disabled {
-    background-color: #00ff00;
-    color: #000;
-    opacity: 0.7;
-}
-
-/* Dislike button */
-#dislike-button-[id] {
-    color: #ff0000;
-    border-color: #ff0000;
-}
-
-#dislike-button-[id]:hover:not(:disabled) {
-    background-color: #ff0000;
-    color: #000;
-}
-
-#dislike-button-[id]:disabled {
-    background-color: #ff0000;
-    color: #000;
-    opacity: 0.7;
-}
-
-/* Review voting buttons */
-.review-buttons {
-    display: flex;
-    gap: 5px;
-    margin-top: 8px;
-}
-
-.review-buttons button {
-    background-color: transparent;
-    border: 1px solid;
-    border-radius: 4px;
-    font-size: 11px;
-    padding: 3px 8px;
-    transition: all 0.2s;
-    cursor: pointer;
-    font-family: 'Courier New', monospace;
-}
-
-/* Review upvote button */
-button[id^="upvote-button"] {
-    color: #00ff00;
-    border-color: #00ff00;
-}
-
-button[id^="upvote-button"]:hover:not(:disabled) {
-    background-color: #00ff00;
-    color: #000;
-}
-
-button[id^="upvote-button"]:disabled {
-    background-color: #00ff00;
-    color: #000;
-    opacity: 0.7;
-}
-
-/* Review downvote button */
-button[id^="downvote-button"] {
-    color: #ff0000;
-    border-color: #ff0000;
-}
-
-button[id^="downvote-button"]:hover:not(:disabled) {
-    background-color: #ff0000;
-    color: #000;
-}
-
-button[id^="downvote-button"]:disabled {
-    background-color: #ff0000;
-    color: #000;
-    opacity: 0.7;
-}
-
-/* Admin/Mod buttons */
+/* Admin buttons (Verify/Unverify/Delete) */
 .admin-buttons {
     display: flex;
     gap: 5px;
@@ -391,17 +251,17 @@ button[id^="downvote-button"]:disabled {
 }
 
 .admin-buttons button {
-    background-color: transparent;
+    background-color: rgba(0, 0, 0, 0.5);
     border: 1px solid;
-    border-radius: 4px;
-    font-size: 11px;
-    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    padding: 2px 6px;
     transition: all 0.2s;
     cursor: pointer;
-    font-family: 'Courier New', monospace;
+    font-family: 'Courier New', Courier, monospace;
+    text-transform: uppercase;
 }
 
-/* Verify button */
 button[onclick^="verifyReview"] {
     color: #00ffff;
     border-color: #00ffff;
@@ -412,7 +272,6 @@ button[onclick^="verifyReview"]:hover {
     color: #000;
 }
 
-/* Unverify button */
 button[onclick^="unverifyReview"] {
     color: #ffff00;
     border-color: #ffff00;
@@ -423,7 +282,6 @@ button[onclick^="unverifyReview"]:hover {
     color: #000;
 }
 
-/* Delete button */
 button[onclick^="deleteReview"] {
     color: #ff00ff;
     border-color: #ff00ff;
@@ -434,27 +292,96 @@ button[onclick^="deleteReview"]:hover {
     color: #000;
 }
 
-/* Review delete button */
-.review-delete-btn {
-    background-color: transparent;
-    border: 1px solid #ff00ff;
-    color: #ff00ff;
-    border-radius: 4px;
+/* Review action buttons (Helpful, Not Helpful, Edit, Delete) */
+.review-actions {
+    display:flex;
+    gap: 10px;
+    margin-top: 5px;
     font-size: 11px;
-    padding: 3px 8px;
-    cursor: pointer;
-    font-family: 'Courier New', monospace;
-    margin-left: 5px;
+    font-family: 'Courier New', Courier, monospace;
+    align-items: center;
 }
 
-.review-delete-btn:hover {
-    background-color: #ff00ff;
+.review-actions .helpful-btn,
+.review-actions .unhelpful-btn {
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid;
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 0 4px;
+    transition: all 0.2s;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    text-transform: uppercase;
+}
+
+.review-actions .helpful-btn:disabled,
+.review-actions .unhelpful-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.review-actions .helpful-btn {
+    color: #b3b3b3;
+    border-color: #00ff00;
+    box-shadow: 0 0 3px rgba(0, 255, 0, 0.3);
+}
+
+.review-actions .helpful-btn:hover:not(:disabled) {
+    background-color: rgba(0, 255, 0, 0.2);
+    color: #00ff00;
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+}
+
+.review-actions .helpful-btn.active {
     color: #000;
+    transform: scale(1.05);
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.8);
+}
+
+.review-actions .unhelpful-btn {
+    color: #b3b3b3;
+    border-color: #ff0000;
+    box-shadow: 0 0 3px rgba(255, 0, 0, 0.3);
+}
+
+.review-actions .unhelpful-btn:hover:not(:disabled) {
+    background-color: rgba(255, 0, 0, 0.2);
+    color: #ff0000;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.7);
+}
+
+.review-actions .unhelpful-btn.active {
+    color: #000;
+    transform: scale(1.05);
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
+}
+
+.edit-review-btn,
+.delete-review-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #00ffff; /* Cyan for Edit */
+    text-decoration: underline;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.delete-review-btn {
+    color: #ff00ff; /* Magenta for Delete */
+}
+
+.edit-review-btn:hover {
+    color: #00ff00; /* Green on hover */
+}
+
+.delete-review-btn:hover {
+    color: #ff0000; /* Red on hover */
 }
 
 /* Enhanced review styling */
 .review-item {
-    border: 2px solid #ff00ff;
     background-color: rgba(17, 17, 17, 0.8);
     padding: 12px;
     margin-bottom: 15px;
@@ -494,18 +421,54 @@ button[onclick^="deleteReview"]:hover {
     font-weight: bold;
 }
 
-.review-text {
-    color: #ffffff;
+.review-rating {
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.review-rating .filled-stars {
+    color: #ffff00;
+    text-shadow: 0 0 3px rgba(255, 255, 0, 0.5);
+}
+
+.review-rating .empty-stars {
+    color: #555;
+}
+
+.review-rating::after {
+    content: '';
+    display: inline-block;
+    width: 100%;
+    height: 1px;
+    background: #ff00ff;
+    margin-top: 2px;
+}
+
+.review-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #00ff00;
+    margin: 5px 0;
+    text-shadow: 1px 1px #ff00ff;
+    white-space: nowrap; /* Prevent wrapping */
+    overflow: hidden; /* Hide overflow */
+    text-overflow: ellipsis; /* Add ellipsis for overflow */
+    max-width: 100%; /* Ensure it doesn’t exceed the container width */
+}
+
+.review-content {
+    color: #c6d4d4;
     line-height: 1.4;
     margin-bottom: 10px;
     font-size: 14px;
+    text-shadow: 0 0 2px rgba(0, 255, 255, 0.3);
 }
 
 .review-metadata {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 12px;
+    font-size: 11px;
     color: #888;
 }
 
@@ -515,7 +478,6 @@ button[onclick^="deleteReview"]:hover {
 
 /* Review form enhancements */
 .game-review-form {
-    border: 2px solid #ff00ff;
     background-color: rgba(17, 17, 17, 0.8);
     padding: 20px;
     border-radius: 8px;
@@ -528,7 +490,7 @@ button[onclick^="deleteReview"]:hover {
     background-color: rgba(0, 0, 0, 0.7);
     border: 2px solid #00ff00;
     color: #00ff00;
-    font-family: 'Courier New', monospace;
+    font-family: 'Courier New', Courier, monospace;
     padding: 12px;
     border-radius: 8px;
     resize: vertical;
@@ -550,7 +512,7 @@ button[onclick^="deleteReview"]:hover {
     cursor: pointer;
     font-weight: bold;
     transition: all 0.2s;
-    font-family: 'Courier New', monospace;
+    font-family: 'Courier New', Courier, monospace;
 }
 
 #submit-review-btn:hover:not(:disabled) {
@@ -563,87 +525,324 @@ button[onclick^="deleteReview"]:hover {
     cursor: not-allowed;
 }
 
-/* Voting buttons styles */
-.vote-btn {
-    background: transparent;
-    border: none;
+/* Voting buttons styles (for Like/Dislike buttons only) */
+.vote-buttons, #vote-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: 15px 0;
+}
+
+.vote-buttons {
+    margin-top: 10px;
+}
+
+.vote-buttons button, #vote-buttons button {
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid;
+    font-size: 12px;
+    font-weight: bold;
     cursor: pointer;
-    font-size: 18px;
-    margin: 0 3px;
-    opacity: 0.6;
+    font-family: 'Courier New', Courier, monospace;
+    min-width: 80px;
+}
+
+.vote-buttons button {
+    border-radius: 8px;
+    padding: 5px 15px;
     transition: all 0.2s;
 }
 
-.vote-btn:hover {
-    transform: scale(1.1);
-    opacity: 1;
-}
-
-.vote-btn.active {
-    opacity: 1;
-    transform: scale(1.2);
-    text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
-}
-
-/* Fix the upvote/downvote button active styles */
-button[id^="upvote-button"].active {
-    color: #00ff00;
-    opacity: 1;
-    transform: scale(1.2);
-    text-shadow: 0 0 5px rgba(0, 255, 0, 0.8);
-}
-
-button[id^="downvote-button"].active {
-    color: #ff0000;
-    opacity: 1;
-    transform: scale(1.2);
-    text-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
-}
-
-/* Replace the vote buttons CSS with these updated styles */
-
-/* Game voting buttons with improved active states */
 #vote-buttons button {
+    border-radius: 5px;
     padding: 8px 16px;
     margin: 0 5px;
-    font-weight: bold;
     transition: all 0.3s ease-in-out;
-    border: 2px solid;
-    background: rgba(0, 0, 0, 0.7);
-    cursor: pointer;
-    border-radius: 5px;
-    font-family: 'Courier New', monospace;
     min-width: 100px;
 }
 
-#vote-buttons button[id^="like-button"] {
+/* Like button (merged all Like button styles) */
+#like-button-[id], .vote-buttons #like-button-[id], button[id^="like-button"], #vote-buttons button[id^="like-button"] {
     color: #00ff00;
     border-color: #00ff00;
 }
 
-#vote-buttons button[id^="like-button"]:hover:not(.active) {
-    background-color: rgba(0, 255, 0, 0.2);
+#like-button-[id]:hover:not(:disabled), .vote-buttons #like-button-[id]:hover, button[id^="like-button"]:hover, button[id^="like-button"]:hover:not(.active), #vote-buttons button[id^="like-button"]:hover:not(.active) {
+    background-color: #00ff00;
+    color: #000;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
 }
 
-#vote-buttons button[id^="like-button"].active {
+#like-button-[id]:disabled {
     background-color: #00ff00;
-    color: #000 !important; 
+    color: #000;
+    opacity: 0.7;
+}
+
+button[id^="like-button"].active, #vote-buttons button[id^="like-button"].active {
+    color: #000 !important;
     transform: scale(1.05);
     box-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
 }
 
-#vote-buttons button[id^="dislike-button"] {
+/* Dislike button (merged all Dislike button styles) */
+#dislike-button-[id], .vote-buttons #dislike-button-[id], button[id^="dislike-button"], #vote-buttons button[id^="dislike-button"] {
     color: #ff0000;
     border-color: #ff0000;
 }
 
-#vote-buttons button[id^="dislike-button"]:hover:not(.active) {
-    background-color: rgba(255, 0, 0, 0.2);
+#dislike-button-[id]:hover:not(:disabled), .vote-buttons #dislike-button-[id]:hover, button[id^="dislike-button"]:hover, button[id^="dislike-button"]:hover:not(.active), #vote-buttons button[id^="dislike-button"]:hover:not(.active) {
+    background-color: #ff0000;
+    color: #000;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
 }
 
-#vote-buttons button[id^="dislike-button"].active {
+#dislike-button-[id]:disabled {
     background-color: #ff0000;
+    color: #000;
+    opacity: 0.7;
+}
+
+button[id^="dislike-button"].active, #vote-buttons button[id^="dislike-button"].active {
     color: #000 !important;
     transform: scale(1.05);
     box-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
+}
+
+/* Grouped active state background colors for vote buttons */
+button[id^="like-button"].active,
+#vote-buttons button[id^="like-button"].active,
+.review-actions .helpful-btn.active {
+    background-color: #038b41; /* Neon cyan for positive votes */
+}
+
+button[id^="dislike-button"].active,
+#vote-buttons button[id^="dislike-button"].active,
+.review-actions .unhelpful-btn.active {
+    background-color: #960631; /* Neon magenta for negative votes */
+}
+
+/* Ratings and votes display */
+.rating-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 15px 0;
+    padding: 10px;
+    border: 1px solid #800080;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.igdb-rating, .user-rating, .game-votes {
+    padding: 5px;
+    text-align: center;
+    font-weight: bold;
+    font-family: 'Courier New', Courier, monospace;
+    background-color: rgba(0, 0, 0, 0.6);
+    border-radius: 6px;
+    transition: transform 0.2s ease-in-out;
+}
+
+.igdb-rating {
+    color: #00ffff;
+    border: 1px solid #00ffff;
+}
+
+.igdb-rating:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.6);
+}
+
+.user-rating {
+    color: #cc00cc;
+    border: 1px solid #cc00cc;
+}
+
+.user-rating:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.6);
+}
+
+.game-votes {
+    color: #00cc00;
+    border: 1px solid #00cc00;
+}
+
+.game-votes:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(0, 204, 0, 0.6);
+}
+
+.game-interaction {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/* Notification container */
+.notifications-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Individual notification */
+.notification {
+    background-color: rgba(17, 17, 17, 0.9);
+    border: 2px solid #ff00ff;
+    color: #00ff00;
+    padding: 10px 15px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+/* Show animation */
+.notification.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Hide animation */
+.notification.hiding {
+    opacity: 0;
+    transform: translateX(100%);
+}
+
+/* Notification types */
+.notification.info {
+    border-color: #00ffff;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.notification.success {
+    border-color: #00ff00;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.notification.error {
+    border-color: #ff0000;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+}
+
+/* Notification content */
+.notification-content {
+    flex: 1;
+}
+
+/* Close button */
+.notification-close {
+    background: none;
+    border: none;
+    color: #ff00ff;
+    cursor: pointer;
+    font-size: 16px;
+    margin-left: 10px;
+    transition: color 0.2s;
+}
+
+.notification-close:hover {
+    color: #ff0000;
+}
+
+/* Confirmation dialog */
+.confirm-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.confirm-dialog-content {
+    background-color: #111;
+    border: 2px solid #ff00ff;
+    box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    font-family: 'Courier New', Courier, monospace;
+    color: #00ff00;
+    max-width: 400px;
+    width: 90%;
+}
+
+.confirm-dialog-content p {
+    margin: 0 0 20px;
+    font-size: 16px;
+}
+
+.confirm-dialog-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.confirm-dialog-buttons button {
+    background-color: rgba(0, 0, 0, 0.7);
+    border: 2px solid;
+    padding: 8px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+#confirm-yes {
+    color: #ff0000;
+    border-color: #ff0000;
+}
+
+#confirm-yes:hover {
+    background-color: #ff0000;
+    color: #000;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+}
+
+#confirm-no {
+    color: #00ff00;
+    border-color: #00ff00;
+}
+
+#confirm-no:hover {
+    background-color: #00ff00;
+    color: #000;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+/* Character counter for review title */
+.char-count {
+    display: block;
+    font-size: 12px;
+    margin-top: 5px;
+    font-family: 'Courier New', Courier, monospace;
+    color: #00ff00;
+}
+
+/* Responsive adjustment for character counter */
+@media (max-width: 768px) {
+    .char-count {
+        font-size: 10px;
+    }
 }

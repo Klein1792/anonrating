@@ -74,6 +74,30 @@ $page_description = 'Login to rate and review games';
     <meta name="csrf-token" content="<?php echo $_SESSION['csrf_token']; ?>">
     <link rel="stylesheet" href="css/main.css">
     <script src="js/konami.js"></script>
+    <style>
+        /* Notification overlay for auto-submit delay */
+        #submit-notification {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(17, 17, 17, 0.9);
+            border: 2px solid #ff00ff;
+            color: #00ff00;
+            padding: 20px 40px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 16px;
+            text-align: center;
+            z-index: 2000;
+        }
+
+        #submit-notification.show {
+            display: block;
+        }
+    </style>
 </head>
 <body class="login-page">
     <div style="text-align: center; margin: 20px;">
@@ -83,8 +107,8 @@ $page_description = 'Login to rate and review games';
         <?php endif; ?>
         <form method="POST" id="login-form">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-            <p><input type="text" name="username" placeholder="Username" required id="username"></p>
-            <p><input type="password" name="password" placeholder="Password" required id="password"></p>
+            <p><input type="text" name="username" placeholder="Username" required id="login-username"></p>
+            <p><input type="password" name="password" placeholder="Password" required id="login-password"></p>
             <div id="symbol-challenge" class="symbols"></div>
             <p id="challenge-status">Press the arrow keys to match the sequence above</p>
             <p><button type="submit" id="submit-login-btn" disabled>LOGIN</button></p>
@@ -102,6 +126,12 @@ $page_description = 'Login to rate and review games';
     <div id="custom-notification" class="custom-notification" style="display: none;">
         <p id="notification-message"></p>
     </div>
+
+    <!-- Submit notification overlay -->
+    <div id="submit-notification">
+        <p>Logging in, please wait...</p>
+    </div>
+
 <script src="js/auth-client.js"></script>
 <script src="js/auth-pages.js"></script>
 <script src="js/auto-submit.js"></script>

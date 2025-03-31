@@ -139,7 +139,7 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
             // Ensure games table exists
             ensureGamesTable($db);
             
-            $stmt = $db->prepare('SELECT details FROM games WHERE id = ?');
+            $stmt = $db->prepare('SELECT details, likes, dislikes, approval_percent, avg_rating, review_count FROM games WHERE id = ?');
             if (!$stmt) {
                 error_log("Prepare failed: " . $db->error);
                 echo json_encode(['success' => false, 'error' => 'Database error: ' . $db->error]);
@@ -158,6 +158,16 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
             
             if ($result && $result->num_rows > 0) {
                 $row = $result->fetch_assoc();
+                
+                // Get vote data
+                $voteData = [
+                    'likes' => (int)$row['likes'],
+                    'dislikes' => (int)$row['dislikes'],
+                    'approval_percent' => (float)$row['approval_percent'],
+                    'avg_rating' => $row['avg_rating'] ? (float)$row['avg_rating'] : null,
+                    'review_count' => (int)$row['review_count']
+                ];
+                
                 if (!empty($row['details'])) {
                     $details = json_decode($row['details'], true);
                     $oneDayInSeconds = 24 * 60 * 60;
@@ -167,6 +177,13 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
                         ($currentTime - $details['last_updated']) < $oneDayInSeconds) {
                         error_log("Using cached game details for ID: $game_id");
                         $game = $details;
+                        
+                        // Add vote data to the cached game object
+                        $game['likes'] = $voteData['likes'];
+                        $game['dislikes'] = $voteData['dislikes'];
+                        $game['approval_percent'] = $voteData['approval_percent'];
+                        $game['avg_rating'] = $voteData['avg_rating'];
+                        $game['review_count'] = $voteData['review_count'];
                     }
                 }
             }
@@ -389,9 +406,13 @@ function ensureGamesTable($db) {
             cover_url VARCHAR(255) NULL,
             details TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            likes INT DEFAULT 0,
+            dislikes INT DEFAULT 0,
+            approval_percent FLOAT DEFAULT 0,
+            avg_rating FLOAT DEFAULT NULL,
+            review_count INT DEFAULT 0
         )
     ");
 }
-/* Removed duplicate ensureIgdbTables function */
 ?>

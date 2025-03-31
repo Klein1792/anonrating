@@ -172,6 +172,7 @@
             
             this.challengeUserInput = [];
             this.challengePressTimes = [];
+            window.gameRating.auth.challengeCompleted = false; // Reset challenge completion flag
             
             const submitBtn = document.getElementById(this.submitBtnId);
             const statusEl = document.getElementById('challenge-status');
@@ -201,6 +202,11 @@
         handleKeydown: function(e) {
             // Skip if in input fields
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+                return;
+            }
+            
+            // Ignore all key presses if auto-submitting is in progress
+            if (window.gameRating.auth.isAutoSubmitting) {
                 return;
             }
             
@@ -283,19 +289,53 @@
                                 this.generateSymbolChallenge();
                             }, 2000);
                         } else {
-                            if (statusEl) statusEl.textContent = 'Sequence matched! You can now submit the form.';
+                            // Mark the challenge as completed
+                            window.gameRating.auth.challengeCompleted = true;
+                            
+                            // Success! Update the status message
+                            if (statusEl) {
+                                statusEl.textContent = this.currentPage === 'login' 
+                                    ? 'Sequence matched! Logging in...' 
+                                    : 'Sequence matched! Registering...';
+                                statusEl.style.color = 'green';
+                            }
+                            
+                            // Add success class to symbols
+                            const challengeDiv = document.getElementById('symbol-challenge');
+                            if (challengeDiv) {
+                                challengeDiv.classList.add('success');
+                            }
+                            
+                            // Enable submit button
                             if (submitBtn) submitBtn.disabled = false;
+                            
+                            // Auto-submit logic will be handled by auto-submit.js
                         }
                     }
                 } else {
-                    // Wrong key
+                    // Wrong key - use original error handling
                     this.resetChallengeHighlights();
                     
                     const statusEl = document.getElementById('challenge-status');
-                    if (statusEl) statusEl.textContent = 'Incorrect sequence! Try again.';
+                    if (statusEl) {
+                        statusEl.textContent = 'Incorrect sequence! Try again.';
+                        statusEl.style.color = 'red';
+                    }
+                    
+                    // Show error feedback temporarily
+                    const challengeDiv = document.getElementById('symbol-challenge');
+                    if (challengeDiv) {
+                        challengeDiv.classList.add('error');
+                        setTimeout(() => {
+                            challengeDiv.classList.remove('error');
+                        }, 500);
+                    }
                     
                     setTimeout(() => {
-                        if (statusEl) statusEl.textContent = 'Press the arrow keys to match the sequence above';
+                        if (statusEl) {
+                            statusEl.textContent = 'Press the arrow keys to match the sequence above';
+                            statusEl.style.color = '';
+                        }
                         this.generateSymbolChallenge();
                     }, 2000);
                 }

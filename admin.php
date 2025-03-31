@@ -31,13 +31,8 @@ if (!$user['is_admin']) {
     <title>Admin Dashboard - Game Rater '98</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/components.css">
-<link rel="stylesheet" href="css/layout.css">
-<link rel="stylesheet" href="css/game-cards.css">
-<link rel="stylesheet" href="css/mobile-controller.css">
-<link rel="stylesheet" href="css/mobile-nav.css">
-<link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/main.css">
+
     <meta name="csrf-token" content="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
 </head>
 <body>
@@ -48,8 +43,42 @@ if (!$user['is_admin']) {
         <h2>Admin Dashboard - Manage Users</h2>
         <div style="text-align: center; margin: 20px; color: #00ff00; text-shadow: 2px 2px #ff00ff; font-family: 'Courier New', Courier, monospace;">
             <h3>Statistics</h3>
-            <p style="margin: 5px 0;">Total Games in Database: <span id="total-games" style="color: #ff00ff; text-shadow: 1px 1px #00ff00;">Loading...</span></p>
+            <p style="margin: 5px 0;">Total Games in Database: <span id="stats-games" style="color: #ff00ff; text-shadow: 1px 1px #00ff00;">Loading...</span></p>
             <p style="margin: 5px 0;">Total Pageviews: <span id="total-pageviews" style="color: #ff00ff; text-shadow: 1px 1px #00ff00;">Loading...</span></p>
+        </div>
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Games</h5>
+                        <p class="card-text" id="card-games">Loading...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Reviews</h5>
+                        <p class="card-text" id="total-reviews">Loading...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Users</h5>
+                        <p class="card-text" id="total-users">Loading...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Review Rate</h5>
+                        <p class="card-text" id="review-rate">Loading...</p>
+                    </div>
+                </div>
+            </div>
         </div>
         <div style="text-align: center; margin: 20px;">
             <input type="text" id="search-user" placeholder="Search by username or ID" style="padding: 5px; font-family: 'Courier New', Courier, monospace; color: #ff00ff; background-color: #000; border: 2px solid #00ff00;">
@@ -124,21 +153,57 @@ if (!$user['is_admin']) {
     });
 
     function loadStatistics() {
-        // Fetch total games
+        // Make a single fetch call to get all statistics
         fetch(`${baseUrl}/api.php?action=getStatistics`)
             .then(response => {
                 if (!response.ok) throw new Error('Failed to fetch statistics: ' + response.status);
                 return response.json();
             })
             .then(data => {
-                document.getElementById('total-games').textContent = data.error ? 'Error' : data.total_games;
+                console.log('Statistics data received:', data); // Debug output
+                
+                // Check if data has success field to determine handling
+                if (data.success !== undefined) {
+                    if (data.success) {
+                        // Update both instances of game count
+                        document.getElementById('stats-games').textContent = data.total_games.toLocaleString();
+                        document.getElementById('card-games').textContent = data.total_games.toLocaleString();
+                        
+                        // Update other statistics
+                        document.getElementById('total-reviews').textContent = data.total_reviews.toLocaleString();
+                        document.getElementById('total-users').textContent = data.total_users.toLocaleString();
+                        
+                        // Calculate and display review rate
+                        const reviewRate = data.total_games > 0 ? 
+                            (data.total_reviews / data.total_games).toFixed(2) : 
+                            '0.00';
+                        document.getElementById('review-rate').textContent = `${reviewRate} reviews/game`;
+                    } else {
+                        // Handle error in data
+                        const errorMsg = data.error || 'Unknown error';
+                        console.error('Error in statistics data:', errorMsg);
+                        document.getElementById('stats-games').textContent = 'Error: ' + errorMsg;
+                        document.getElementById('card-games').textContent = 'Error';
+                        document.getElementById('total-reviews').textContent = 'Error';
+                        document.getElementById('total-users').textContent = 'Error';
+                        document.getElementById('review-rate').textContent = 'Error';
+                    }
+                } else {
+                    // Simple data format (backward compatibility)
+                    document.getElementById('stats-games').textContent = data.error ? 'Error' : data.total_games;
+                    document.getElementById('card-games').textContent = data.error ? 'Error' : data.total_games;
+                }
             })
             .catch(error => {
-                console.error('Error fetching total games:', error);
-                document.getElementById('total-games').textContent = 'Error';
+                console.error('Error fetching statistics:', error);
+                document.getElementById('stats-games').textContent = 'Error: ' + error.message;
+                document.getElementById('card-games').textContent = 'Error';
+                document.getElementById('total-reviews').textContent = 'Error';
+                document.getElementById('total-users').textContent = 'Error';
+                document.getElementById('review-rate').textContent = 'Error';
             });
 
-        // Fetch total pageviews
+        // Fetch total pageviews separately
         fetch(`${baseUrl}/api.php?action=getPageviews`)
             .then(response => {
                 if (!response.ok) throw new Error('Failed to fetch pageviews: ' + response.status);

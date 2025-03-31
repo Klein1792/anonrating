@@ -23,8 +23,12 @@
         const formId = isLoginPage ? 'login-form' : 'register-form';
         const successMessage = isLoginPage ? 'Sequence matched! Logging in...' : 'Sequence matched! Registering...';
         
-        // Flag to track if we're in the process of auto-submitting
-        let isAutoSubmitting = false;
+        // Flag to track if we're in the process of auto-submitting (made global)
+        window.gameRating.auth.isAutoSubmitting = false;
+        // Flag to track if the challenge is completed
+        window.gameRating.auth.challengeCompleted = false;
+        // Flag to track if an auto-submit is already scheduled
+        let autoSubmitScheduled = false;
         
         // Get form and add id if missing
         const form = document.getElementById(formId) || 
@@ -35,13 +39,54 @@
         }
         
         if (form) {
-            // THIS IS THE CRITICAL FIX:
-            // Completely override the form's submit method to prevent any uncontrolled submissions
+            // Override the form's submit method to perform the actual submission
             const originalSubmit = form.submit;
             form.submit = function() {
-                // Only allow submission if we're in auto-submit mode
-                if (isAutoSubmitting) {
-                    originalSubmit.apply(form);
+                // Only allow submission if we're in auto-submit mode or challenge is completed
+                if (window.gameRating.auth.isAutoSubmitting || window.gameRating.auth.challengeCompleted) {
+                    // Create a FormData object with the form data
+                    const formData = new FormData(form);
+                    
+                    // Send the form data via fetch to ensure proper submission
+                    fetch(form.action, {
+                        method: form.method,
+                        body: formData,
+                        credentials: 'same-origin'
+                    }).then(response => {
+                        if (response.redirected) {
+                            // Follow the redirect to index.php
+                            window.location.href = response.url;
+                        } else {
+                            return response.json().then(data => {
+                                if (data.success) {
+                                    // Redirect to index.php if the response indicates success
+                                    window.location.href = '/index.php';
+                                } else {
+                                    // Show error message if login fails
+                                    const statusEl = document.getElementById('challenge-status');
+                                    if (statusEl) {
+                                        statusEl.textContent = data.error || 'Login failed. Please try again.';
+                                        statusEl.style.color = 'red';
+                                    }
+                                    // Reset flags to allow retry
+                                    window.gameRating.auth.isAutoSubmitting = false;
+                                    form.disabled = false;
+                                    autoSubmitScheduled = false;
+                                }
+                            });
+                        }
+                    }).catch(error => {
+                        console.error('Error submitting form:', error);
+                        const statusEl = document.getElementById('challenge-status');
+                        if (statusEl) {
+                            statusEl.textContent = 'An error occurred. Please try again.';
+                            statusEl.style.color = 'red';
+                        }
+                        // Reset flags to allow retry
+                        window.gameRating.auth.isAutoSubmitting = false;
+                        form.disabled = false;
+                        autoSubmitScheduled = false;
+                    });
                 } else {
                     const submitBtn = document.getElementById(window.gameRating.auth.submitBtnId);
                     if (submitBtn && !submitBtn.disabled) {
@@ -68,9 +113,9 @@
                 }
             };
             
-            // Prevent default form submission event
+            // Handle form submission event
             form.addEventListener('submit', function(e) {
-                // Always prevent normal submission
+                // Always prevent default submission
                 e.preventDefault();
                 e.stopPropagation();
                 
@@ -82,7 +127,6 @@
                         statusEl.textContent = 'Complete the arrow sequence first!';
                         statusEl.style.color = 'red';
                         
-                        // Reset after a delay
                         setTimeout(() => {
                             statusEl.textContent = 'Press the arrow keys to match the sequence above';
                             statusEl.style.color = '';
@@ -90,40 +134,47 @@
                     } else {
                         window.gameRating.utils.showNotification('Complete the arrow sequence first!');
                     }
+                } else if (window.gameRating.auth.challengeCompleted) {
+                    // Challenge is completed, trigger immediate submission
+                    window.gameRating.auth.isAutoSubmitting = true;
+                    
+                    const statusEl = document.getElementById('challenge-status');
+                    if (statusEl) {
+                        statusEl.textContent = successMessage;
+                        statusEl.style.color = 'green';
+                    }
+                    
+                    // Add success class to symbols
+                    const challengeDiv = document.getElementById('symbol-challenge');
+                    if (challengeDiv) {
+                        challengeDiv.classList.add('success');
+                    }
+                    
+                    // Disable the entire form to prevent further interaction
+                    form.disabled = true;
+                    
+                    // Immediately trigger the submission
+                    form.submit();
                 }
                 return false;
             });
         }
         
-        // Prevent Enter key in form fields from submitting
+        // Block other key presses at the document level during auto-submit (for Konami code)
         document.addEventListener('keydown', function(e) {
-            // If Enter key is pressed anywhere in the document
-            if (e.key === 'Enter') {
-                const submitBtn = document.getElementById(window.gameRating.auth.submitBtnId);
+            // If auto-submitting is in progress, block all key presses except Enter
+            if (window.gameRating.auth.isAutoSubmitting && e.key !== 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
                 
-                // If the challenge is not complete OR 
-                // if we're waiting for auto-submit, prevent Enter key action
-                if (!submitBtn || submitBtn.disabled || isAutoSubmitting) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    if (submitBtn && submitBtn.disabled) {
-                        // Show message only if challenge is not complete
-                        const statusEl = document.getElementById('challenge-status');
-                        if (statusEl) {
-                            statusEl.textContent = 'Complete the arrow sequence first!';
-                            statusEl.style.color = 'red';
-                            
-                            setTimeout(() => {
-                                statusEl.textContent = 'Press the arrow keys to match the sequence above';
-                                statusEl.style.color = '';
-                            }, 2000);
-                        }
-                    }
-                    return false;
+                const statusEl = document.getElementById('challenge-status');
+                if (statusEl) {
+                    statusEl.textContent = 'Please wait, processing...';
+                    statusEl.style.color = 'green';
                 }
+                return false;
             }
-        }, true); // Using capture phase to ensure we get the event first
+        }, true); // Using capture phase to ensure we block keys first
         
         // Override handleChallengeKey to add auto-submit
         window.gameRating.auth.handleChallengeKey = function(keyCode) {
@@ -148,6 +199,9 @@
                                 this.generateSymbolChallenge();
                             }, 2000);
                         } else {
+                            // Mark the challenge as completed
+                            window.gameRating.auth.challengeCompleted = true;
+                            
                             // Success! Update the status message
                             if (statusEl) {
                                 statusEl.textContent = successMessage;
@@ -163,16 +217,24 @@
                             // Enable submit button
                             if (submitBtn) submitBtn.disabled = false;
                             
-                            // Set auto-submitting flag
-                            isAutoSubmitting = true;
-                            
-                            // Auto-submit after a delay using our overridden method
-                            setTimeout(() => {
-                                if (form) {
-                                    // This will call our overridden submit method above
-                                    form.submit();
-                                }
-                            }, 800);
+                            // Trigger auto-submit
+                            if (!autoSubmitScheduled) {
+                                autoSubmitScheduled = true;
+                                window.gameRating.auth.isAutoSubmitting = true;
+                                
+                                // Disable the entire form to prevent further interaction
+                                form.disabled = true;
+                                
+                                // Auto-submit immediately (0ms delay)
+                                setTimeout(() => {
+                                    if (form) {
+                                        form.submit();
+                                        window.gameRating.auth.isAutoSubmitting = false;
+                                        form.disabled = false;
+                                        autoSubmitScheduled = false;
+                                    }
+                                }, 0); // Changed from 800ms to 0ms
+                            }
                         }
                     }
                 } else {
@@ -205,6 +267,6 @@
             }
         };
 
-        console.log('Auto-submit challenge enhancement loaded with priority Enter key blocking.');
+        console.log('Auto-submit challenge enhancement loaded with immediate submission.');
     }
 })();

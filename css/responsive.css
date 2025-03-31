@@ -1,7 +1,7 @@
 /* Clean up the duplicate media queries and fix mobile spacing */
 @media (max-width: 768px) {
     body {
-        padding-top: 100px; /* Increased for mobile header height */
+        padding-top: 80px; /* Adjusted to account for dynamic header height */
         font-size: 14px;
         padding-bottom: 0; /* Remove bottom padding - add as needed */
     }
@@ -20,8 +20,35 @@
     }
     
     /* Header styles */
-    .header-container { 
-        padding: 10px 5px; 
+    .header-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 0 5px;
+        position: absolute; 
+    }
+
+    .header-main {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding-top: 10px;
+    }
+
+    #status {
+        position: static; /* Remove absolute positioning on mobile */
+        transform: none;
+        left: auto;
+        bottom: auto;
+        font-size: 0.6rem;
+        padding: 5px 10px;
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 4px;
+        text-align: center;
+        white-space: nowrap;
+        z-index: 10;
     }
     
     /* Form elements */
@@ -68,12 +95,32 @@
     #sort-select {
         margin-bottom: 10px;
     }
+
+    /* Shrink Helpful and Not Helpful buttons on mobile */
+    .review-actions .helpful-btn,
+    .review-actions .unhelpful-btn {
+        font-size: 8px; /* Smaller font size on mobile */
+        padding: 0 2px; /* Minimal padding */
+        min-height: 5px !important; /* Reduced height */
+        margin: 1px 0; /* Add slight vertical margin to prevent overlap */
+    }
+
+    /* Adjust Edit and Delete buttons to match */
+    .review-actions .edit-review-btn,
+    .review-actions .delete-review-btn {
+        font-size: 8px; /* Match font size */
+    }
+
+    /* Adjust the review-actions container for better spacing */
+    .review-actions {
+        gap: 5px; /* Reduce gap between buttons on mobile */
+    }
 }
 
 /* Very small screens */
 @media (max-width: 480px) {
     body {
-        padding-top: 90px; /* Slightly less for very small screens */
+        padding-top: 90px; /* Adjusted for smaller screens */
     }
     
     h1 { font-size: 1.5rem; }
@@ -84,11 +131,35 @@
         font-size: 16px; 
         padding: 14px 10px; 
     }
+
+    /* Further shrink Helpful and Not Helpful buttons on very small screens */
+    .review-actions .helpful-btn,
+    .review-actions .unhelpful-btn {
+        font-size: 7px; /* Even smaller font size */
+        padding: 0 1px; /* Minimal padding */
+        min-height: 14px; /* Further reduced height */
+        margin: 1px 0; /* Keep slight vertical margin */
+    }
+
+    .review-actions .edit-review-btn,
+    .review-actions .delete-review-btn {
+        font-size: 7px; /* Match font size */
+    }
+
+    .review-actions {
+        gap: 4px; /* Further reduce gap */
+    }
 }
 
 /* iPhone 12 Pro specific fix */
 @media (max-width: 390px) {
     body {
-        padding-top: 100px; /* Extra padding for iPhone 12 Pro */
+        padding-top: 90px; /* Adjusted for iPhone 12 Pro */
+    }
+}
+
+@media (max-width: 768px) {
+    .review-title {
+        font-size: 12px;
     }
 }
