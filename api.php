@@ -35,6 +35,7 @@ try {
     require_once 'api/voting.php';
     require_once 'api/reviews.php';
     require_once 'api/stats.php';
+    require_once 'api/batch.php';
     // Start session if not already started
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
@@ -162,6 +163,15 @@ try {
     
     // Process the API request based on action
     $handled = false;
+
+    // Handle batch requests first
+    if (function_exists('handleBatchRequests')) {
+        $handled = handleBatchRequests($action, $db);
+        if ($handled) {
+            if (isset($db) && $db instanceof mysqli) { $db->close(); }
+            exit;
+        }
+    }
 
     // Auth actions
     if (function_exists('handleAuthActions')) {

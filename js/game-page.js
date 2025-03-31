@@ -247,109 +247,201 @@
     }
     
     function loadGameDetails(gameId) {
-        fetch(`${window.baseUrl}/api.php?action=getGameDetails&id=${gameId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to fetch game details');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error || !data.success) {
-                    showNotification(data.error || 'Error loading game details', 'error');
-                    return;
-                }
-                
-                const gameData = data.game || data;
-                
-                document.title = `${gameData.name} - Game Details - Game Rater '98`;
-                
-                const titleElement = document.getElementById('game-title');
-                if (titleElement) titleElement.textContent = gameData.name;
-                
-                const coverElement = document.getElementById('game-cover');
-                if (coverElement) {
-                    const coverUrl = gameData.cover?.url 
-                        ? (gameData.cover.url.startsWith('https:') ? gameData.cover.url : 'https:' + gameData.cover.url).replace('t_thumb', 't_cover_big')
-                        : `${window.baseUrl}/images/default-image.jpg`;
-                    coverElement.src = coverUrl;
-                    coverElement.alt = gameData.name;
-                }
-                
-                const descriptionElement = document.getElementById('game-description');
-                if (descriptionElement) descriptionElement.textContent = gameData.summary || 'No description available.';
-                
-                if (gameData.videos && gameData.videos.length > 0) {
-                    const trailerDiv = document.getElementById('game-trailer');
-                    if (trailerDiv) {
-                        trailerDiv.innerHTML = `
-                            <iframe width="100%" height="100%" 
-                                src="https://www.youtube.com/embed/${gameData.videos[0].video_id}" 
-                                frameborder="0" 
-                                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen>
-                            </iframe>
-                        `;
+        // Try to get static content from cache first
+        const cachedStaticData = window.GameCache?.getGameStatic(gameId);
+        
+        if (cachedStaticData) {
+            console.log('Using cached static game data');
+            // Render the static content immediately
+            renderGameStatic(cachedStaticData);
+            
+            // Fetch only dynamic data
+            fetch(`${window.baseUrl}/api.php?action=getGameDynamicData&id=${gameId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch dynamic data: ${response.status}`);
                     }
-                } else {
-                    const trailerDiv = document.getElementById('game-trailer');
-                    if (trailerDiv) {
-                        trailerDiv.innerHTML = `<p>No trailer available</p>`;
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.dynamic) {
+                        // Update the dynamic parts of the page
+                        updateGameDynamic(data.dynamic);
+                    } else {
+                        console.warn('Invalid dynamic data response:', data);
+                        // Fallback: Use default dynamic data
+                        updateGameDynamic({
+                            likes: 0,
+                            dislikes: 0,
+                            approval_percent: 0,
+                            avg_rating: null,
+                            review_count: 0
+                        });
+                        showNotification('Failed to load dynamic game data. Showing default values.', 'error');
                     }
-                }
-                
-                updateGameMetaSection(gameData);
-                
-                const voteButtonsDiv = document.getElementById('vote-buttons');
-                if (voteButtonsDiv) {
-                    voteButtonsDiv.innerHTML = `
-                        <button id="like-button-${gameId}" onclick="likeGame(${gameId})">
-                            Like
-                        </button>
-                        <button id="dislike-button-${gameId}" onclick="dislikeGame(${gameId})">
-                            Dislike
-                        </button>
-                    `;
-                }
-                
-                const ratingDiv = document.getElementById('game-rating');
-                if (ratingDiv) {
-                    let igdbRatingText = 'IGDB Rating: N/A';
-                    if (gameData.rating) {
-                        const formattedRating = Math.round(gameData.rating);
-                        igdbRatingText = `IGDB Rating: ${formattedRating}/100`;
+                })
+                .catch(error => {
+                    console.error('Error loading dynamic data:', error);
+                    // Fallback: Use default dynamic data
+                    updateGameDynamic({
+                        likes: 0,
+                        dislikes: 0,
+                        approval_percent: 0,
+                        avg_rating: null,
+                        review_count: 0
+                    });
+                    showNotification('Failed to load dynamic game data. Showing default values.', 'error');
+                });
+        } else {
+            // Original code path for loading all game details
+            fetch(`${window.baseUrl}/api.php?action=getGameDetails&id=${gameId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch game details: ${response.status}`);
                     }
-                    
-                    let userRatingText = 'anon Rating: N/A';
-                    if (gameData.avg_rating && gameData.avg_rating > 0) {
-                        const formattedAvgRating = gameData.avg_rating === 10 ? 10 : gameData.avg_rating.toFixed(1);
-                        userRatingText = `anon Rating: ${formattedAvgRating}/10 (${gameData.review_count} ${gameData.review_count === 1 ? 'review' : 'reviews'})`;
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.game && data.game.static && data.game.dynamic) {
+                        const gameData = data.game;
+                        
+                        // Cache only the static part
+                        if (window.GameCache && gameData.static) {
+                            window.GameCache.saveGameStatic(gameId, gameData.static);
+                        }
+                        
+                        // Render everything
+                        renderGameStatic(gameData.static);
+                        updateGameDynamic(gameData.dynamic);
+                    } else {
+                        console.warn('Invalid game details response:', data);
+                        showNotification('Failed to load game details. Please try again later.', 'error');
                     }
-                    
-                    const likes = gameData.likes || 0;
-                    const dislikes = gameData.dislikes || 0;
-                    const totalVotes = likes + dislikes;
-                    const approvalPercent = gameData.approval_percent || 0;
-                    
-                    let approvalText = 'No votes yet';
-                    if (totalVotes > 0) {
-                        approvalText = `${Math.round(approvalPercent)}% (${likes}/${totalVotes}) approval`;
-                    }
-                    
-                    ratingDiv.innerHTML = `
-                        <div class="rating-container">
-                            <div class="igdb-rating">${igdbRatingText}</div>
-                            <div class="user-rating">${userRatingText}</div>
-                            <div class="game-votes">${approvalText}</div>
-                        </div>
-                    `;
-                }
+                })
+                .catch(error => {
+                    console.error('Error loading game details:', error);
+                    showNotification('Failed to load game details. Please try again later.', 'error');
+                });
+        }
+    }
+    
+    function renderGameStatic(gameData) {
+        document.title = `${gameData.name} - Game Details - Game Rater '98`;
                 
-                checkUserVote(gameId);
-            })
-            .catch(() => {
-                showNotification('Failed to load game details. Please try again later.', 'error');
-            });
+        const titleElement = document.getElementById('game-title');
+        if (titleElement) titleElement.textContent = gameData.name;
+        
+        const coverElement = document.getElementById('game-cover');
+        if (coverElement) {
+            const coverUrl = gameData.cover?.url 
+                ? (gameData.cover.url.startsWith('https:') ? gameData.cover.url : 'https:' + gameData.cover.url).replace('t_thumb', 't_cover_big')
+                : `${window.baseUrl}/images/default-image.jpg`;
+            coverElement.src = coverUrl;
+            coverElement.alt = gameData.name;
+        }
+        
+        const descriptionElement = document.getElementById('game-description');
+        if (descriptionElement) descriptionElement.textContent = gameData.summary || 'No description available.';
+        
+        if (gameData.videos && gameData.videos.length > 0) {
+            const trailerDiv = document.getElementById('game-trailer');
+            if (trailerDiv) {
+                trailerDiv.innerHTML = `
+                    <iframe width="100%" height="100%" 
+                        src="https://www.youtube.com/embed/${gameData.videos[0].video_id}" 
+                        frameborder="0" 
+                        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen>
+                    </iframe>
+                `;
+            }
+        } else {
+            const trailerDiv = document.getElementById('game-trailer');
+            if (trailerDiv) {
+                trailerDiv.innerHTML = `<p>No trailer available</p>`;
+            }
+        }
+        
+        updateGameMetaSection(gameData);
+        
+        const voteButtonsDiv = document.getElementById('vote-buttons');
+        if (voteButtonsDiv) {
+            voteButtonsDiv.innerHTML = `
+                <button id="like-button-${gameData.id}" onclick="likeGame(${gameData.id})">
+                    Like
+                </button>
+                <button id="dislike-button-${gameData.id}" onclick="dislikeGame(${gameData.id})">
+                    Dislike
+                </button>
+            `;
+        }
+        
+        const ratingDiv = document.getElementById('game-rating');
+        if (ratingDiv) {
+            let igdbRatingText = 'IGDB Rating: N/A';
+            if (gameData.rating) {
+                const formattedRating = Math.round(gameData.rating);
+                igdbRatingText = `IGDB Rating: ${formattedRating}/100`;
+            }
+            
+            let userRatingText = 'anon Rating: N/A';
+            if (gameData.avg_rating && gameData.avg_rating > 0) {
+                const formattedAvgRating = gameData.avg_rating === 10 ? 10 : gameData.avg_rating.toFixed(1);
+                userRatingText = `anon Rating: ${formattedAvgRating}/10 (${gameData.review_count} ${gameData.review_count === 1 ? 'review' : 'reviews'})`;
+            }
+            
+            const likes = gameData.likes || 0;
+            const dislikes = gameData.dislikes || 0;
+            const totalVotes = likes + dislikes;
+            const approvalPercent = gameData.approval_percent || 0;
+            
+            let approvalText = 'No votes yet';
+            if (totalVotes > 0) {
+                approvalText = `${Math.round(approvalPercent)}% (${likes}/${totalVotes}) approval`;
+            }
+            
+            ratingDiv.innerHTML = `
+                <div class="rating-container">
+                    <div class="igdb-rating">${igdbRatingText}</div>
+                    <div class="user-rating">${userRatingText}</div>
+                    <div class="game-votes">${approvalText}</div>
+                </div>
+            `;
+        }
+        
+        checkUserVote(gameData.id);
+    }
+    
+    function updateGameDynamic(dynamicData) {
+        const ratingDiv = document.getElementById('game-rating');
+        if (ratingDiv) {
+            let userRatingText = 'anon Rating: N/A';
+            // Ensure avg_rating is a number and greater than 0
+            const avgRating = dynamicData.avg_rating != null ? parseFloat(dynamicData.avg_rating) : null;
+            if (avgRating != null && !isNaN(avgRating) && avgRating > 0) {
+                const formattedAvgRating = avgRating === 10 ? 10 : avgRating.toFixed(1);
+                userRatingText = `anon Rating: ${formattedAvgRating}/10 (${dynamicData.review_count} ${dynamicData.review_count === 1 ? 'review' : 'reviews'})`;
+            }
+            
+            const likes = dynamicData.likes || 0;
+            const dislikes = dynamicData.dislikes || 0;
+            const totalVotes = likes + dislikes;
+            const approvalPercent = dynamicData.approval_percent || 0;
+            
+            let approvalText = 'No votes yet';
+            if (totalVotes > 0) {
+                approvalText = `${Math.round(approvalPercent)}% (${likes}/${totalVotes}) approval`;
+            }
+            
+            ratingDiv.innerHTML = `
+                <div class="rating-container">
+                    <div class="user-rating">${userRatingText}</div>
+                    <div class="game-votes">${approvalText}</div>
+                </div>
+            `;
+        }
+        
+        checkUserVote(dynamicData.id);
     }
     
     function updateGameMetaSection(gameData) {

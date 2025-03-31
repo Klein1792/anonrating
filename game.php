@@ -12,6 +12,7 @@ $is_admin_or_moderator = hasPermission('moderator');
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta charset="UTF-8">
     <title>Game Details - Game Rater '98</title>
@@ -35,6 +36,7 @@ $is_admin_or_moderator = hasPermission('moderator');
     </script>
 </head>
 <body class="game-page">
+
     <?php include 'header.php'; ?>
     <div class="game-page-container">
         <!-- Header Section -->
@@ -81,6 +83,50 @@ $is_admin_or_moderator = hasPermission('moderator');
             <div class="meta-item">
                 <strong>Related Links:</strong> <span id="game-websites"></span>
             </div>
+            <!-- Add this inside the game-header-info div, after the meta-item divs -->
+<div class="meta-item cache-controls">
+    <button id="refresh-static" class="btn btn-sm" onclick="clearGameCache()">
+        <span class="refresh-icon">↻</span> Refresh Game Data
+    </button>
+    <small id="cache-timestamp"></small>
+</div>
+
+<script>
+// Function to clear game cache and reload
+function clearGameCache() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameId = urlParams.get('id');
+    
+    if (gameId && window.GameCache) {
+        localStorage.removeItem(`game_static_${gameId}`);
+        document.getElementById('refresh-static').disabled = true;
+        document.getElementById('refresh-static').innerHTML = '<span class="refresh-icon spinning">↻</span> Refreshing...';
+        
+        // Reload the page to get fresh data
+        window.location.reload();
+    }
+}
+
+// Update the cache timestamp display
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameId = urlParams.get('id');
+    
+    if (gameId && window.GameCache) {
+        const cachedItem = localStorage.getItem(`game_static_${gameId}`);
+        if (cachedItem) {
+            try {
+                const item = JSON.parse(cachedItem);
+                const cacheTime = new Date(item.expiry - (12 * 60 * 60 * 1000));
+                document.getElementById('cache-timestamp').textContent = 
+                    `Data cached: ${cacheTime.toLocaleString()}`;
+            } catch (e) {
+                console.error('Error reading cache timestamp:', e);
+            }
+        }
+    }
+});
+</script>
         </div>
     </div>
 </div>
@@ -136,7 +182,47 @@ $is_admin_or_moderator = hasPermission('moderator');
         </div>
     </div>
 
-    <script src="js/game-page.js"></script>
+    <!-- Add this before the game-page.js script -->
+<script>
+// Game Static Content Cache Manager
+const GameCache = {
+    // Get cached static data for a game
+    getGameStatic: function(gameId) {
+        try {
+            const cachedItem = localStorage.getItem(`game_static_${gameId}`);
+            if (!cachedItem) return null;
+            
+            const item = JSON.parse(cachedItem);
+            // Cache for 12 hours (43200000 ms)
+            if (Date.now() > item.expiry) {
+                localStorage.removeItem(`game_static_${gameId}`);
+                return null;
+            }
+            
+            return item.data;
+        } catch (e) {
+            console.error('Cache read error:', e);
+            return null;
+        }
+    },
+    
+    // Save static game data
+    saveGameStatic: function(gameId, staticData) {
+        try {
+            const item = {
+                data: staticData,
+                expiry: Date.now() + (12 * 60 * 60 * 1000) // 12 hours
+            };
+            localStorage.setItem(`game_static_${gameId}`, JSON.stringify(item));
+        } catch (e) {
+            console.error('Cache write error:', e);
+        }
+    }
+};
+
+// Add to window object
+window.GameCache = GameCache;
+</script>
     <?php include 'footer.php'; ?>
 </body>
 </html>

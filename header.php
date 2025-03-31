@@ -55,6 +55,7 @@ if (isset($_SESSION['user_id'])) {
 
 <!-- Page-specific scripts loaded conditionally -->
 <?php if ($current_page === 'game.php'): ?>
+<script src="js/batch-api.js"></script>
 <script src="js/game-page.js"></script>
 <?php endif; ?>
     <!-- Any page-specific head content -->

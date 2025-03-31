@@ -137,9 +137,97 @@
         }
     }
     
-    // Load all tabs with games
+    // Replace the loadAllTabs function with this batched version:
     function loadAllTabs() {
-        Object.values(tabs).forEach(tab => loadTab(tab, currentPage[tab.id] || 1));
+        // Check if BatchAPI is available
+        if (window.BatchAPI) {
+            // Create batch requests for all tabs
+            const batchRequests = Object.entries(tabs).map(([tabId, tab]) => {
+                const page = currentPage[tab.id] || 1;
+                
+                // Map frontend sort values to backend sort values if needed
+                const sortMap = {
+                    'release': 'first_release_date'
+                };
+                
+                const apiSort = sortMap[currentSort] || currentSort;
+                
+                // Build params for this tab request
+                const params = {
+                    type: tab.type,
+                    page: page,
+                    limit: 20,
+                    search: currentSearch,
+                    sort: apiSort,
+                    sortDirection: currentSortDirection
+                };
+                
+                if (tab.genre) params.genre = tab.genre;
+                if (tab.platform) params.platform = tab.platform;
+                
+                // Show loading state
+                const container = document.getElementById(tab.id);
+                if (container) {
+                    container.innerHTML = '<div class="loading-spinner">Loading...</div>';
+                }
+                
+                // Return batch request object
+                return {
+                    action: 'games',
+                    params: params,
+                    tabId: tabId,
+                    tabConfig: tab
+                };
+            });
+            
+            // Make a single batch API call for all tabs
+            window.BatchAPI.batch(batchRequests.map(req => ({
+                action: req.action,
+                params: req.params
+            })))
+            .then(responses => {
+                // Process each response and update the corresponding tab
+                responses.forEach((response, index) => {
+                    const { tabId, tabConfig } = batchRequests[index];
+                    const container = document.getElementById(tabConfig.id);
+                    
+                    if (!container) return;
+                    
+                    if (!response || response.error) {
+                        container.innerHTML = `<p style="color: #ff00ff;">Error: ${response?.error || 'Failed to load'}</p>`;
+                        return;
+                    }
+                    
+                    const data = response;
+                    container.innerHTML = '';
+                    
+                    const games = Array.isArray(data.games) ? data.games : [];
+                    
+                    // Special messaging for empty states
+                    if (games.length === 0) {
+                        const infoMsg = document.createElement('div');
+                        infoMsg.className = 'alert alert-info';
+                        infoMsg.textContent = currentSearch 
+                            ? `No games found matching "${currentSearch}"`
+                            : 'No games found in this category';
+                        container.appendChild(infoMsg);
+                    } else {
+                        // Render all games
+                        games.forEach(game => container.appendChild(renderGameCard(game)));
+                    }
+                    
+                    renderPornhubPagination(tabConfig, Math.ceil((data.total || 0) / 20), currentPage[tabConfig.id] || 1);
+                });
+            })
+            .catch(error => {
+                console.error('Batch API error:', error);
+                // Fallback to individual requests on batch failure
+                Object.values(tabs).forEach(tab => loadTab(tab, currentPage[tab.id] || 1));
+            });
+        } else {
+            // Fallback for when BatchAPI is not available
+            Object.values(tabs).forEach(tab => loadTab(tab, currentPage[tab.id] || 1));
+        }
     }
     
     // Update the loadTab function to use global sort settings

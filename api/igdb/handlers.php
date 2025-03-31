@@ -22,8 +22,7 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
         mkdir(dirname($token_file), 0777, true);
     }
     
-    // Ensure tables exist
-    ensureIgdbTables($db);
+    // tables exist
     
     // Handle IGDB-related actions
     if ($action === 'games') {
@@ -134,11 +133,9 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
             echo json_encode(['success' => false, 'error' => 'Failed to authenticate with IGDB API']);
             return true;
         }
-
+    
         try {
-            // Ensure games table exists
-            ensureGamesTable($db);
-            
+            // Fetch game data from the database
             $stmt = $db->prepare('SELECT details, likes, dislikes, approval_percent, avg_rating, review_count FROM games WHERE id = ?');
             if (!$stmt) {
                 error_log("Prepare failed: " . $db->error);
@@ -155,11 +152,12 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
             
             $result = $stmt->get_result();
             $game = null;
+            $voteData = null;
             
             if ($result && $result->num_rows > 0) {
                 $row = $result->fetch_assoc();
                 
-                // Get vote data
+                // Prepare dynamic data (vote data)
                 $voteData = [
                     'likes' => (int)$row['likes'],
                     'dislikes' => (int)$row['dislikes'],
@@ -177,13 +175,6 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
                         ($currentTime - $details['last_updated']) < $oneDayInSeconds) {
                         error_log("Using cached game details for ID: $game_id");
                         $game = $details;
-                        
-                        // Add vote data to the cached game object
-                        $game['likes'] = $voteData['likes'];
-                        $game['dislikes'] = $voteData['dislikes'];
-                        $game['approval_percent'] = $voteData['approval_percent'];
-                        $game['avg_rating'] = $voteData['avg_rating'];
-                        $game['review_count'] = $voteData['review_count'];
                     }
                 }
             }
@@ -199,13 +190,13 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
                     echo json_encode(['success' => false, 'error' => 'Game not found']);
                     return true;
                 }
-
+    
                 if (isset($game['error'])) {
                     error_log("Error fetching game details: " . $game['error']);
                     echo json_encode(['success' => false, 'error' => $game['error']]);
                     return true;
                 }
-
+    
                 // Process game data
                 $developer = 'N/A';
                 $publisher = 'N/A';
@@ -219,7 +210,7 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
                         }
                     }
                 }
-
+    
                 $trailer = null;
                 if (isset($game['videos']) && is_array($game['videos'])) {
                     foreach ($game['videos'] as $video) {
@@ -229,13 +220,13 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
                         }
                     }
                 }
-
+    
                 $tags = [];
                 if (isset($game['tags']) && is_array($game['tags'])) {
                     $tag_names = fetchTagNames($client_id, $token, $game['tags']);
                     $tags = $tag_names;
                 }
-
+    
                 $websites = [];
                 if (isset($game['websites']) && is_array($game['websites'])) {
                     foreach ($game['websites'] as $website) {
@@ -249,36 +240,87 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
                         }
                     }
                 }
-
+    
                 $game['developer'] = $developer;
                 $game['publisher'] = $publisher;
                 $game['trailer'] = $trailer;
                 $game['tags'] = $tags;
                 $game['websites'] = $websites;
                 $game['last_updated'] = time();
-
+    
                 // Cache to database
                 $details_json = json_encode($game);
                 $name = $db->real_escape_string($game['name'] ?? 'Unknown');
                 $first_release_date = isset($game['first_release_date']) ? (int)$game['first_release_date'] : null;
                 $cover_url = isset($game['cover']['url']) ? $db->real_escape_string('https:' . $game['cover']['url']) : null;
-
+    
                 $stmt = $db->prepare('INSERT INTO games (id, name, first_release_date, cover_url, details) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, first_release_date = ?, cover_url = ?, details = ?');
                 if (!$stmt) {
                     error_log("Prepare failed: " . $db->error);
-                } else {
-                    $stmt->bind_param('isisssiss', $game_id, $name, $first_release_date, $cover_url, $details_json, $name, $first_release_date, $cover_url, $details_json);
-                    if (!$stmt->execute()) {
-                        error_log("Execute failed: " . $stmt->error);
-                    }
-                    $stmt->close();
+                    echo json_encode(['success' => false, 'error' => 'Database error: ' . $db->error]);
+                    return true;
                 }
+                
+                $stmt->bind_param('isisssiss', $game_id, $name, $first_release_date, $cover_url, $details_json, $name, $first_release_date, $cover_url, $details_json);
+                if (!$stmt->execute()) {
+                    error_log("Execute failed: " . $stmt->error);
+                    echo json_encode(['success' => false, 'error' => 'Database error: ' . $stmt->error]);
+                    return true;
+                }
+                $stmt->close();
+    
+                // Re-fetch dynamic data after updating the game details
+                $stmt = $db->prepare('SELECT likes, dislikes, approval_percent, avg_rating, review_count FROM games WHERE id = ?');
+                if (!$stmt) {
+                    error_log("Prepare failed: " . $db->error);
+                    echo json_encode(['success' => false, 'error' => 'Database error: ' . $db->error]);
+                    return true;
+                }
+                
+                $stmt->bind_param('i', $game_id);
+                if (!$stmt->execute()) {
+                    error_log("Execute failed: " . $stmt->error);
+                    echo json_encode(['success' => false, 'error' => 'Database error: ' . $stmt->error]);
+                    return true;
+                }
+                
+                $result = $stmt->get_result();
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    $voteData = [
+                        'likes' => (int)$row['likes'],
+                        'dislikes' => (int)$row['dislikes'],
+                        'approval_percent' => (float)$row['approval_percent'],
+                        'avg_rating' => $row['avg_rating'] ? (float)$row['avg_rating'] : null,
+                        'review_count' => (int)$row['review_count']
+                    ];
+                } else {
+                    $voteData = [
+                        'likes' => 0,
+                        'dislikes' => 0,
+                        'approval_percent' => 0,
+                        'avg_rating' => null,
+                        'review_count' => 0
+                    ];
+                }
+                $stmt->close();
             }
-
-            // Return game data
+    
+            // Create static game data by removing dynamic properties from game data
+            $staticGameData = $game;
+            unset($staticGameData['likes']);
+            unset($staticGameData['dislikes']);
+            unset($staticGameData['approval_percent']);
+            unset($staticGameData['avg_rating']);
+            unset($staticGameData['review_count']);
+    
+            // Return the response
             echo json_encode([
                 'success' => true,
-                'game' => $game
+                'game' => [
+                    'static' => $staticGameData,
+                    'dynamic' => $voteData
+                ]
             ]);
             
             return true;
@@ -361,8 +403,45 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
             'totalPages' => ceil($totalReviews / $perPage)
         ]);
         return true;
+    } elseif ($action === 'getGameDynamicData') {
+        $game_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if (!$game_id) {
+            echo json_encode(['success' => false, 'error' => 'Invalid game ID']);
+            return true;
+        }
+        
+        $stmt = $db->prepare('SELECT likes, dislikes, approval_percent, avg_rating, review_count FROM games WHERE id = ?');
+        $stmt->bind_param('i', $game_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $voteData = [
+                'likes' => (int)$row['likes'],
+                'dislikes' => (int)$row['dislikes'],
+                'approval_percent' => (float)$row['approval_percent'],
+                'avg_rating' => $row['avg_rating'] !== null ? (float)$row['avg_rating'] : null,
+                'review_count' => (int)$row['review_count']
+            ];
+            echo json_encode([
+                'success' => true,
+                'dynamic' => $voteData
+            ]);
+        } else {
+            echo json_encode([
+                'success' => true,
+                'dynamic' => [
+                    'likes' => 0,
+                    'dislikes' => 0,
+                    'approval_percent' => 0,
+                    'avg_rating' => null,
+                    'review_count' => 0
+                ]
+            ]);
+        }
+        return true;
     }
-    
     // No handler matched
     return false;
 }
@@ -372,47 +451,9 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
  * 
  * @param object $db Database connection
  */
-function ensureIgdbTables($db) {
-    // Create games table if it doesn't exist
-    ensureGamesTable($db);
-    
-    // Create game_votes table if it doesn't exist  
-    $db->query("
-        CREATE TABLE IF NOT EXISTS game_votes (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            game_id INT NOT NULL,
-            user_id INT NULL,
-            anonymous_token VARCHAR(64) NULL,
-            vote TINYINT NOT NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY user_game (game_id, user_id),
-            UNIQUE KEY anon_game (game_id, anonymous_token)
-        )
-    ");
-}
-
 /**
  * Ensure games table exists
  * 
  * @param object $db Database connection
  */
-function ensureGamesTable($db) {
-    $db->query("
-        CREATE TABLE IF NOT EXISTS games (
-            id INT NOT NULL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            first_release_date INT NULL,
-            cover_url VARCHAR(255) NULL,
-            details TEXT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            likes INT DEFAULT 0,
-            dislikes INT DEFAULT 0,
-            approval_percent FLOAT DEFAULT 0,
-            avg_rating FLOAT DEFAULT NULL,
-            review_count INT DEFAULT 0
-        )
-    ");
-}
 ?>
