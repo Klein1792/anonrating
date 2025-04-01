@@ -60,7 +60,9 @@ try {
         'checkReviewVote',
         'login',
         'register',
-        'refreshToken'
+        'refreshToken',
+        'getReviewComments'
+        
     ];
     
     // Define semi-restricted actions that need either authenticated or anonymous users
@@ -70,7 +72,8 @@ try {
         'addReview',
         'editReview',
         'deleteReview',
-        'reportReview'
+        'reportReview',
+        'addReviewComment'
     ];
     
     // Define admin-only actions

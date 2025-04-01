@@ -62,6 +62,7 @@ if (isset($_SESSION['user_id'])) {
 <script src="js/game/reviews.js"></script>
 <script src="js/game/review-votes.js"></script>
 <script src="js/game/review-actions.js"></script>
+<script src="js/game/review-comments.js"></script> 
 <script src="js/game/moderation-actions.js"></script>
 <script src="js/game/challenge-system.js"></script>
 <script src="js/game/game-votes.js"></script> <!-- Add this line -->

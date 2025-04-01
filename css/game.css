@@ -84,7 +84,8 @@
 }
 
 .game-header-info {
-    align-items: flex-start;
+    align-items: stretch !important;
+    width: 100%;
 }
 
 .game-meta {
@@ -95,11 +96,12 @@
     min-height: 300px;
     box-sizing: border-box;
     overflow-y: auto;
-    max-width: 300px;
-    word-break: break-all;
+    max-width: none;
+    word-break: break-word;
     white-space: normal;
     display: flex;
     flex-direction: column;
+    flex:1;
 }
 
 .meta-item {
@@ -462,7 +464,7 @@ button[onclick^="deleteReview"]:hover {
     color: #c6d4d4;
     line-height: 1.4;
     margin-bottom: 10px;
-    font-size: 14px;
+    font-size: 16px;
     text-shadow: 0 0 2px rgba(0, 255, 255, 0.3);
 }
 
@@ -853,6 +855,7 @@ button[id^="dislike-button"].active,
     margin-top: 20px;
     border-top: 1px solid #444;
     padding-top: 10px;
+    display: none;
 }
 
 #refresh-static {
@@ -1013,4 +1016,125 @@ button[id^="dislike-button"].active,
     padding: 2px 5px;
     transform: rotate(15deg);
     opacity: 0.8;
+}
+
+/* Comment system styles */
+.review-comments {
+    margin-left: 20px;
+    margin-top: 10px;
+    border-left: 2px solid #1e87a1;
+    padding-left: 15px;
+}
+
+.review-comment {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+    border: 1px solid #555;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+}
+
+.comment-author {
+    color: #00ff00;
+    font-weight: bold;
+}
+
+.comment-date {
+    color: #999;
+    font-size: 0.9em;
+}
+
+.comment-content {
+    color: #ccc;
+    font-size: 0.95em;
+    margin-bottom: 8px;
+    white-space: pre-wrap;
+}
+
+.comment-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.comment-actions button {
+    font-size: 0.8em;
+    padding: 3px 8px;
+    background-color: #333;
+    color: #ccc;
+    border: 1px solid #555;
+    border-radius: 3px;
+}
+
+.comment-form {
+    margin-bottom: 15px;
+}
+
+.comment-form textarea {
+    width: 100%;
+    background-color: #222;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 8px;
+    font-family: inherit;
+}
+
+.comment-banned {
+    opacity: 0.7;
+}
+
+.comments-header {
+    color: #00ff00;
+    font-size: 1em;
+    margin-top: 5px;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed #555;
+    padding-bottom: 3px;
+}
+
+.no-comments {
+    color: #999;
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+/* Updated Reply button styling to match Helpful/Unhelpful buttons */
+.reply-review-btn {
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid #00aaff;
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 0 4px;
+    transition: all 0.2s;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    text-transform: uppercase;
+    color: #b3b3b3;
+    box-shadow: 0 0 3px rgba(0, 170, 255, 0.3);
+}
+
+.reply-review-btn:hover:not(:disabled) {
+    background-color: rgba(0, 170, 255, 0.2);
+    color: #00aaff;
+    box-shadow: 0 0 5px rgba(0, 170, 255, 0.7);
+}
+
+.reply-review-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Active state when a user is actively replying */
+.reply-review-btn.active {
+    background-color: #006699;
+    color: #fff;
+    transform: scale(1.05);
+    box-shadow: 0 0 5px rgba(0, 170, 255, 0.8);
 }

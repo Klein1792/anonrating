@@ -53,10 +53,16 @@
                 });
                 
                 setupPagination(pagination.current_page, pagination.total_pages, gameId);
+                
+                // Add this line to initialize comments after reviews are loaded
+                if (window.ReviewComments && window.ReviewComments.initializeComments) {
+                    window.ReviewComments.initializeComments();
+                }
             })
             .catch(error => {
                 document.getElementById('reviews-list').innerHTML = `<p class="error">Error: ${error.message}</p>`;
             });
+            
     }
     
     /**
@@ -74,7 +80,6 @@
         const reviewDiv = document.createElement('div');
         reviewDiv.className = 'review-item';
         reviewDiv.id = `review-${review.id}`;
-
         // Add banned class if the user is banned
         if (review.is_banned) {
             reviewDiv.classList.add('review-banned');
@@ -165,7 +170,24 @@
         reportBtn.onclick = () => ReviewActions.showReportDialog(review.id);
         actionsDiv.appendChild(reportBtn);
         
+        // Add Reply button after the existing buttons in actionsDiv
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'reply-review-btn';
+        replyBtn.textContent = 'Reply';
+        replyBtn.onclick = () => ReviewComments.showReplyForm(review.id);
+        actionsDiv.appendChild(replyBtn);
+        
         reviewDiv.appendChild(actionsDiv);
+        
+        // Add a container for comments
+        const commentsContainer = document.createElement('div');
+        commentsContainer.className = 'review-comments';
+        commentsContainer.id = `comments-${review.id}`;
+        reviewDiv.appendChild(commentsContainer);
+        
+        // Load existing comments
+        ReviewComments.loadComments(review.id);
+        
         container.appendChild(reviewDiv);
         
         ReviewVotes.checkReviewVote(review.id);

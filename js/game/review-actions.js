@@ -284,10 +284,6 @@
      * Delete a review after confirmation
      * @param {number} reviewId - ID of the review to delete
      */
-   /**
- * Delete a review after confirmation
- * @param {number} reviewId - ID of the review to delete
- */
 function deleteReview(reviewId) {
     if (!reviewId) {
         console.error('Invalid review ID');
@@ -295,36 +291,88 @@ function deleteReview(reviewId) {
         return;
     }
 
-    if (!confirm('Are you sure you want to delete this review? This action cannot be undone.')) {
-        return;
-    }
+    // Create custom confirmation dialog
+    showDeleteConfirmDialog('Are you sure you want to delete this review? This action cannot be undone.')
+        .then(confirmed => {
+            if (!confirmed) return;
+            
+            // User confirmed deletion, proceed with API call
+            const fetchFn = window.gameRating?.auth?.fetchWithAuth || AuthUtils.fetchWithAuth;
+            
+            fetchFn(`${window.baseUrl}/api.php?action=deleteReview`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ reviewId: reviewId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    UIUtils.showNotification('Review deleted successfully.', 'success');
+                    // Reload reviews
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const gameId = urlParams.get('id');
+                    if (gameId) {
+                        window.Reviews.loadReviews(1, gameId);
+                    }
+                } else {
+                    UIUtils.showNotification(data.error || 'Failed to delete review', 'error');
+                }
+            })
+            .catch(error => {
+                UIUtils.showNotification('Error: ' + error.message, 'error');
+            });
+        });
+}
 
-    // Get fetch function from auth-utils or auth-client
-    const fetchFn = window.gameRating?.auth?.fetchWithAuth || AuthUtils.fetchWithAuth;
-
-    fetchFn(`${window.baseUrl}/api.php?action=deleteReview`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ reviewId: reviewId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            UIUtils.showNotification('Review deleted successfully.', 'success');
-            // Reload reviews
-            const urlParams = new URLSearchParams(window.location.search);
-            const gameId = urlParams.get('id');
-            if (gameId) {
-                window.Reviews.loadReviews(1, gameId);
-            }
-        } else {
-            UIUtils.showNotification(data.error || 'Failed to delete review', 'error');
+/**
+ * Show a styled confirmation dialog for delete actions
+ * @param {string} message - The confirmation message to display
+ * @returns {Promise<boolean>} - Resolves to true if confirmed, false otherwise
+ */
+function showDeleteConfirmDialog(message) {
+    return new Promise((resolve) => {
+        let dialog = document.getElementById('confirm-dialog');
+        if (!dialog) {
+            dialog = document.createElement('div');
+            dialog.id = 'confirm-dialog';
+            dialog.className = 'confirm-dialog';
+            document.body.appendChild(dialog);
         }
-    })
-    .catch(error => {
-        UIUtils.showNotification('Error: ' + error.message, 'error');
+        
+        dialog.innerHTML = `
+            <div class="confirm-dialog-content">
+                <p>${message}</p>
+                <div class="confirm-dialog-buttons">
+                    <button id="confirm-yes">Yes, Delete</button>
+                    <button id="confirm-no">Cancel</button>
+                </div>
+            </div>
+        `;
+        
+        dialog.style.display = 'flex';
+        
+        const yesBtn = document.getElementById('confirm-yes');
+        const noBtn = document.getElementById('confirm-no');
+        
+        yesBtn.addEventListener('click', () => {
+            dialog.style.display = 'none';
+            resolve(true);
+        });
+        
+        noBtn.addEventListener('click', () => {
+            dialog.style.display = 'none';
+            resolve(false);
+        });
+        
+        // Close when clicking outside the dialog content
+        dialog.addEventListener('click', function(event) {
+            if (event.target === dialog) {
+                dialog.style.display = 'none';
+                resolve(false);
+            }
+        });
     });
 }
 

@@ -337,61 +337,29 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         $perPage = isset($_GET['perPage']) ? (int)$_GET['perPage'] : 5;
         $offset = ($page - 1) * $perPage;
-
-        $token = getIgdbToken($client_id, $client_secret, $token_file);
-        if (!$token) {
-            echo json_encode(['error' => 'Failed to authenticate with IGDB API']);
-            return true;
-        }
-        $game = fetchGameDetails($client_id, $token, $game_id);
-        if (isset($game['error'])) {
-            echo json_encode(['error' => $game['error']]);
-            return true;
-        }
-        if (!$game || !isset($game['name'])) {
-            echo json_encode(['error' => 'Game not found']);
-            return true;
-        }
-        $game_name = $game['name'];
-
-        $stmt = $db->prepare('SELECT COUNT(*) as total FROM reviews WHERE gameName = ?');
-        if (!$stmt) {
-            error_log("Prepare failed: " . $db->error);
-            echo json_encode(['error' => 'Database error: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('s', $game_name);
-        if (!$stmt->execute()) {
-            error_log("Execute failed: " . $stmt->error);
-            echo json_encode(['error' => 'Database error: ' . $stmt->error]);
-            return true;
-        }
+    
+        $stmt = $db->prepare('SELECT COUNT(*) as total FROM reviews WHERE game_id = ?');
+        $stmt->bind_param('i', $game_id);
+        $stmt->execute();
         $totalResult = $stmt->get_result()->fetch_assoc();
         $totalReviews = $totalResult['total'];
         $stmt->close();
-
-        $stmt = $db->prepare('SELECT r.*, u.username FROM reviews r LEFT JOIN users u ON r.user_id = u.id WHERE r.gameName = ? ORDER BY r.created_at DESC LIMIT ? OFFSET ?');
-        if (!$stmt) {
-            error_log("Prepare failed: " . $db->error);
-            echo json_encode(['error' => 'Database error: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('sii', $game_name, $perPage, $offset);
-        if (!$stmt->execute()) {
-            error_log("Execute failed: " . $stmt->error);
-            echo json_encode(['error' => 'Database error: ' . $stmt->error]);
-            return true;
-        }
+    
+        $stmt = $db->prepare('SELECT r.*, u.username FROM reviews r LEFT JOIN users u ON r.user_id = u.id WHERE r.game_id = ? ORDER BY r.created_at DESC LIMIT ? OFFSET ?');
+        $stmt->bind_param('iii', $game_id, $perPage, $offset);
+        $stmt->execute();
         $result = $stmt->get_result();
         $reviews = [];
         while ($row = $result->fetch_assoc()) {
             $reviews[] = [
                 'id' => (int)$row['id'],
-                'gameName' => $row['gameName'],
-                'reviewText' => $row['reviewText'],
-                'votes' => (int)$row['votes'],
-                'verified' => (bool)$row['verified'],
-                'username' => $row['user_id'] ? $row['username'] : 'Anonymous'
+                'game_id' => (int)$row['game_id'],
+                'display_name' => $row['user_id'] ? $row['username'] : $row['display_name'],
+                'is_anonymous' => !empty($row['anonymous_token']),
+                'title' => $row['title'],
+                'content' => $row['content'],
+                'rating' => (int)$row['rating'],
+                'created_at' => $row['created_at']
             ];
         }
         $stmt->close();
