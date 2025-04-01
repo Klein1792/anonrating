@@ -520,55 +520,86 @@ function handleUserActions($action, $db, $user_id) {
         return true;
         
     } elseif ($action === 'banAnonymousUser' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Check if user is admin
-        $stmt = $db->prepare('SELECT is_admin FROM users WHERE id = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('i', $user_id);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        $result = $stmt->get_result();
-        if (!$result || $result->num_rows === 0) {
-            echo json_encode(['error' => 'Unauthorized: User not found']);
-            return true;
-        }
-        $user = $result->fetch_assoc();
-        $stmt->close();
-        if (!$user['is_admin']) {
-            echo json_encode(['error' => 'Unauthorized: You must be an admin']);
-            return true;
-        }
-        
-        $token = isset($_GET['token']) ? $_GET['token'] : '';
-        if (empty($token)) {
-            echo json_encode(['error' => 'Missing token parameter']);
-            return true;
-        }
-        
-        $stmt = $db->prepare('UPDATE anonymous_users SET is_banned = 1 WHERE token = ?');
-        if (!$stmt) {
-            echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
-            return true;
-        }
-        $stmt->bind_param('s', $token);
-        if (!$stmt->execute()) {
-            echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
-            return true;
-        }
-        
-        if ($stmt->affected_rows > 0) {
-            echo json_encode(['success' => true, 'message' => 'Anonymous user banned']);
-        } else {
-            echo json_encode(['success' => false, 'error' => 'Anonymous user not found']);
-        }
-        $stmt->close();
+    // Check if user is admin or moderator
+    $stmt = $db->prepare('SELECT is_admin, is_moderator FROM users WHERE id = ?');
+    if (!$stmt) {
+        echo json_encode(['error' => 'Prepare failed: ' . $db->error]);
         return true;
+    }
+    $stmt->bind_param('i', $user_id);
+    if (!$stmt->execute()) {
+        echo json_encode(['error' => 'Execute failed: ' . $stmt->error]);
+        return true;
+    }
+    $result = $stmt->get_result();
+    if (!$result || $result->num_rows === 0) {
+        echo json_encode(['error' => 'Unauthorized: User not found']);
+        return true;
+    }
+    $user = $result->fetch_assoc();
+    $stmt->close();
+    if (!$user['is_admin'] && !$user['is_moderator']) {
+        echo json_encode(['error' => 'Unauthorized: You must be an admin or moderator']);
+        return true;
+    }
+    
+    $token = isset($_GET['token']) ? $_GET['token'] : '';
+    if (empty($token)) {
+        echo json_encode(['error' => 'Missing token parameter']);
+        return true;
+    }
+    
+    // Start transaction to handle both anonymous token and associated account
+    $db->begin_transaction();
+    
+    try {
+        // First check if this anonymous token is linked to a user account
+        $stmt = $db->prepare('SELECT user_id FROM user_anonymous_mapping WHERE anonymous_token = ? LIMIT 1');
+        $stmt->bind_param('s', $token);
+        $stmt->execute();
+        $result = $stmt->get_result();
         
-    } elseif ($action === 'unbanAnonymousUser' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        // If there's a linked user account, ban that account too
+        if ($result->num_rows > 0) {
+            $linkedUser = $result->fetch_assoc();
+            $linkedUserId = $linkedUser['user_id'];
+            
+            // Don't allow banning admins
+            $stmt = $db->prepare('SELECT is_admin FROM users WHERE id = ?');
+            $stmt->bind_param('i', $linkedUserId);
+            $stmt->execute();
+            $userResult = $stmt->get_result();
+            $userData = $userResult->fetch_assoc();
+            
+            if (!$userData['is_admin']) {
+                // Ban the linked user account
+                $stmt = $db->prepare('UPDATE users SET is_banned = 1 WHERE id = ?');
+                $stmt->bind_param('i', $linkedUserId);
+                $stmt->execute();
+            }
+        }
+        
+        // Ban the anonymous token
+        $stmt = $db->prepare('UPDATE anonymous_users SET is_banned = 1 WHERE token = ?');
+        $stmt->bind_param('s', $token);
+        $stmt->execute();
+        
+        $db->commit();
+        
+        echo json_encode([
+            'success' => true, 
+            'message' => ($result->num_rows > 0) ? 
+                'Anonymous user and associated account banned' : 
+                'Anonymous user banned'
+        ]);
+    }
+    catch (Exception $e) {
+        $db->rollback();
+        echo json_encode(['success' => false, 'error' => 'Error during ban process: ' . $e->getMessage()]);
+    }
+    
+    return true;
+} elseif ($action === 'unbanAnonymousUser' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         // Check if user is admin
         $stmt = $db->prepare('SELECT is_admin FROM users WHERE id = ?');
         if (!$stmt) {

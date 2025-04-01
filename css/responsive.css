@@ -98,8 +98,8 @@
 
     /* Shrink Helpful and Not Helpful buttons on mobile */
     .review-actions .helpful-btn,
-    .review-actions .unhelpful-btn {
-        font-size: 8px; /* Smaller font size on mobile */
+    .review-actions .unhelpful-btn,.review-actions .report-review-btn {
+        font-size: 7px; /* Smaller font size on mobile */
         padding: 0 2px; /* Minimal padding */
         min-height: 5px !important; /* Reduced height */
         margin: 1px 0; /* Add slight vertical margin to prevent overlap */

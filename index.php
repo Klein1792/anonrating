@@ -119,6 +119,39 @@ include 'db_connect.php';
     <!-- Include footer with GameBoy controller -->
     <?php include 'footer.php'; ?>
 
+    <script>
+    // Simple BatchAPI implementation for the index page
+    window.BatchAPI = {
+        batch: async function(requests) {
+            try {
+                const response = await fetch(`${window.baseUrl}/api.php?action=batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ batch: requests }),
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Batch request failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Unknown batch error');
+                }
+                
+                return data.responses;
+            } catch (error) {
+                console.error('Batch API error:', error);
+                throw error;
+            }
+        }
+    };
+    </script>
     <script src="js/index-page.js"></script>
 </body>
 </html>

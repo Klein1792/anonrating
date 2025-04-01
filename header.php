@@ -50,12 +50,21 @@ if (isset($_SESSION['user_id'])) {
 <!-- Core utilities first -->
 <script src="js/konami.js"></script>
 <script src="js/konami-handler.js"></script>
-<!-- Specific functionality modules -->
+
+<!-- Auth module -->
 <script src="js/auth-client.js"></script>
 
 <!-- Page-specific scripts loaded conditionally -->
 <?php if ($current_page === 'game.php'): ?>
-<script src="js/batch-api.js"></script>
+    <script src="js/game/auth-utils.js"></script>
+<script src="js/game/ui-utils.js"></script>
+<script src="js/game/game-details.js"></script>
+<script src="js/game/reviews.js"></script>
+<script src="js/game/review-votes.js"></script>
+<script src="js/game/review-actions.js"></script>
+<script src="js/game/moderation-actions.js"></script>
+<script src="js/game/challenge-system.js"></script>
+<script src="js/game/game-votes.js"></script> <!-- Add this line -->
 <script src="js/game-page.js"></script>
 <?php endif; ?>
     <!-- Any page-specific head content -->

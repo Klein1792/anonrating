@@ -167,6 +167,30 @@ if (!$user['is_admin']) {
                 <button id="anon-next-page" disabled>Next</button>
             </div>
         </div>
+        <div style="text-align: center; margin: 20px;">
+            <h3 style="color: #00ff00; text-shadow: 2px 2px #ff00ff; font-family: 'Courier New', Courier, monospace;">Reported Reviews</h3>
+            <table style="margin: 0 auto; border-collapse: collapse; width: 80%;">
+                <thead>
+                    <tr>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Review</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Game</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Reporter</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Reason</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Date</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Status</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="reports-table">
+                    <!-- Reports will be populated here by JavaScript -->
+                </tbody>
+            </table>
+            <div style="text-align: center; margin: 20px;">
+                <button id="reports-prev-page" disabled>Previous</button>
+                <span id="reports-page-info">Page 1 of 1</span>
+                <button id="reports-next-page" disabled>Next</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -595,12 +619,272 @@ if (!$user['is_admin']) {
         loadAnonymousUsers(anonCurrentPage + 1);
     });
 
+    // Reports Management
+    let reportsCurrentPage = 1;
+    const reportsPerPage = 10;
+
+    function loadReportedReviews(page = 1) {
+        reportsCurrentPage = page;
+        fetch(`${baseUrl}/api.php?action=getReportedReviews&page=${page}&limit=${reportsPerPage}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = 'login.php';
+                        throw new Error('Unauthorized: Please log in');
+                    }
+                    throw new Error('Failed to fetch reports: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const reportsTable = document.getElementById('reports-table');
+                reportsTable.innerHTML = '';
+                
+                if (!data.reports || data.reports.length === 0) {
+                    reportsTable.innerHTML = `<tr><td colspan="7" style="color: #00ff00; text-align: center;">No reported reviews found</td></tr>`;
+                    return;
+                }
+                
+                data.reports.forEach(report => {
+                    const row = document.createElement('tr');
+                    
+                    // Truncate review content if too long
+                    const reviewContent = report.review_content.length > 50 ? 
+                        report.review_content.substring(0, 50) + '...' : 
+                        report.review_content;
+                    
+                    row.innerHTML = `
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${reviewContent}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${report.game_name}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${report.reporter_name || 'Anonymous'}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${report.reason}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${report.created_at}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${getStatusLabel(report.status)}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">
+                            <button onclick="viewReportDetails(${report.id})">View Details</button>
+                            <button onclick="viewReport(${report.id}, ${report.review_id}, ${report.game_id})">View on Page</button>
+                            <button onclick="dismissReport(${report.id})">Dismiss</button>
+                            <button onclick="actionReport(${report.id}, ${report.review_id})">Remove Review</button>
+                        </td>
+                    `;
+                    reportsTable.appendChild(row);
+                });
+
+                // Update pagination
+                document.getElementById('reports-page-info').textContent = `Page ${data.current_page} of ${data.total_pages || 1}`;
+                document.getElementById('reports-prev-page').disabled = data.current_page <= 1;
+                document.getElementById('reports-next-page').disabled = data.current_page >= (data.total_pages || 1);
+            })
+            .catch(error => {
+                console.error('Error fetching reports:', error);
+                document.getElementById('reports-table').innerHTML = 
+                    `<tr><td colspan="7" style="color: #ff00ff; text-align: center;">Error: ${error.message}</td></tr>`;
+            });
+    }
+
+    function getStatusLabel(status) {
+        switch(status) {
+            case 'pending':
+                return '<span style="color: #ffcc00;">Pending</span>';
+            case 'reviewing':
+                return '<span style="color: #00ccff;">Reviewing</span>';
+            case 'rejected':
+                return '<span style="color: #00ff00;">Dismissed</span>';
+            case 'actioned':
+                return '<span style="color: #ff0000;">Actioned</span>';
+            default:
+                return status;
+        }
+    }
+
+    function viewReport(reportId, reviewId, gameId) {
+        // Update report status to "reviewing"
+        fetch(`${baseUrl}/api.php?action=updateReportStatus&id=${reportId}&status=reviewing`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-CSRF-Token': getCsrfToken() || ""
+            }
+        }).then(response => response.json());
+        
+        // Open the game page to see the review in context
+        window.open(`${baseUrl}/game.php?id=${gameId}#review-${reviewId}`, '_blank');
+    }
+
+    function dismissReport(reportId) {
+        if (!confirm('Are you sure you want to dismiss this report?')) return;
+        
+        fetch(`${baseUrl}/api.php?action=updateReportStatus&id=${reportId}&status=rejected`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-CSRF-Token': getCsrfToken() || ""
+            }
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to update report status');
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showNotification('Report dismissed successfully');
+                    loadReportedReviews(reportsCurrentPage);
+                } else {
+                    showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => showNotification('Error: ' + error.message, 'error'));
+    }
+
+    function actionReport(reportId, reviewId) {
+        if (!confirm('Are you sure you want to remove this review? This action cannot be undone.')) return;
+        
+        // First remove the review
+        fetch(`${baseUrl}/api.php?action=adminDeleteReview&id=${reviewId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-CSRF-Token': getCsrfToken() || ""
+            }
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to delete review');
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // If review was removed successfully, update report status
+                    return fetch(`${baseUrl}/api.php?action=updateReportStatus&id=${reportId}&status=actioned`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'X-CSRF-Token': getCsrfToken() || ""
+                        }
+                    });
+                } else {
+                    throw new Error(data.error || 'Failed to delete review');
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Review removed and report marked as actioned');
+                    loadReportedReviews(reportsCurrentPage);
+                } else {
+                    showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => showNotification('Error: ' + error.message, 'error'));
+    }
+
+    // Set up pagination buttons for reports
+    document.getElementById('reports-prev-page').addEventListener('click', () => {
+        if (reportsCurrentPage > 1) {
+            loadReportedReviews(reportsCurrentPage - 1);
+        }
+    });
+
+    document.getElementById('reports-next-page').addEventListener('click', () => {
+        loadReportedReviews(reportsCurrentPage + 1);
+    });
+
+    // Add this function after your existing report management functions
+
+    function viewReportDetails(reportId) {
+        // Fetch the complete report details
+        fetch(`${baseUrl}/api.php?action=getReportDetails&id=${reportId}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to fetch report details');
+                return response.json();
+            })
+            .then(data => {
+                if (!data.report) {
+                    showNotification('Error: Report not found', 'error');
+                    return;
+                }
+                
+                // Create modal to display report details
+                const report = data.report;
+                const modal = document.createElement('div');
+                modal.className = 'report-details-modal';
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100%';
+                modal.style.height = '100%';
+                modal.style.backgroundColor = 'rgba(0,0,0,0.8)';
+                modal.style.display = 'flex';
+                modal.style.justifyContent = 'center';
+                modal.style.alignItems = 'center';
+                modal.style.zIndex = '1000';
+                
+                modal.innerHTML = `
+                    <div style="background-color: #000; border: 2px solid #ff00ff; padding: 20px; width: 80%; max-width: 800px; max-height: 80vh; overflow-y: auto; color: #00ff00; font-family: 'Courier New', monospace;">
+                        <h2 style="color: #ff00ff;">Report Details</h2>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h3>Report Information</h3>
+                            <p><strong>Status:</strong> ${getStatusLabel(report.status)}</p>
+                            <p><strong>Reporter:</strong> ${report.reporter_name || 'Anonymous'}</p>
+                            <p><strong>Reason:</strong> ${report.reason}</p>
+                            <p><strong>Date Reported:</strong> ${report.created_at}</p>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h3>Review Content</h3>
+                            <div style="border: 1px solid #ff00ff; padding: 10px; background-color: rgba(255,0,255,0.1);">
+                                ${report.review_content}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h3>Reporter's Additional Details</h3>
+                            <div style="border: 1px solid #ff00ff; padding: 10px; background-color: rgba(255,0,255,0.1);">
+                                ${report.details || '<em>No additional details provided</em>'}
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                            <div>
+                                <button onclick="dismissReport(${report.id}); document.querySelector('.report-details-modal').remove();" 
+                                        style="background-color: #333; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer;">
+                                    Dismiss Report
+                                </button>
+                                <button onclick="actionReport(${report.id}, ${report.review_id}); document.querySelector('.report-details-modal').remove();" 
+                                        style="background-color: #800000; color: white; border: 1px solid #ff0000; padding: 5px 10px; cursor: pointer; margin-left: 10px;">
+                                    Remove Review
+                                </button>
+                            </div>
+                            <button onclick="document.querySelector('.report-details-modal').remove();" 
+                                    style="background-color: #333; color: white; border: 1px solid #ccc; padding: 5px 10px; cursor: pointer;">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+            })
+            .catch(error => {
+                showNotification('Error: ' + error.message, 'error');
+            });
+    }
+
     // Load statistics and users when the page loads
     loadStatistics();
     loadUsers();
     loadModerators();
     loadAdmins();
     loadAnonymousUsers();
+    loadReportedReviews();
 
     // Add this if you don't already have a showNotification function
     function showNotification(message, type = 'info') {

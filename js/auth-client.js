@@ -520,36 +520,24 @@
         }
     }
     
-    /**
-     * Parse a JWT token
-     * @param {string} token - JWT token
-     * @returns {object|null} Parsed token payload or null if invalid
-     */
+    // Function to get a cookie value by name
+    function getCookie(name) {
+        const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+        return match ? decodeURIComponent(match[3]) : null;
+    }
+
+    // Parse JWT token
     function parseJwt(token) {
-        if (!token) return null;
-        
         try {
             const base64Url = token.split('.')[1];
             const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
             const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
                 return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
             }).join(''));
-            
             return JSON.parse(jsonPayload);
         } catch (e) {
-            console.error('Error parsing JWT:', e);
             return null;
         }
-    }
-    
-    /**
-     * Get a cookie by name
-     * @param {string} name - Cookie name
-     * @returns {string|null} Cookie value or null if not found
-     */
-    function getCookie(name) {
-        const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
-        return match ? decodeURIComponent(match[3]) : null;
     }
     
     // Public API
@@ -561,13 +549,17 @@
         getAuthToken,
         getAnonymousToken,
         fetchWithAuth,
-        logout
+        logout,
+        getCookie,        // Add this line
+        parseJwt          // Optional: also expose parseJwt which might be useful
     };
     
     // Expose for backward compatibility
     window.fetchWithAuth = window.gameRating.auth.fetchWithAuth;
     window.getAuthToken = window.gameRating.auth.getAuthToken;
     window.logout = window.gameRating.auth.logout;
+    window.getCookie = getCookie;       // Add this line
+    window.parseJwt = parseJwt;         // Optional: also expose parseJwt
     
     // Auto-initialize
     document.addEventListener('DOMContentLoaded', init);

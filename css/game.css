@@ -24,8 +24,10 @@
 .game-header-video, .game-header-image, .game-header-info {
     flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 0px;
 }
 
 /* Specific flex section adjustments */
@@ -369,7 +371,7 @@ button[onclick^="deleteReview"]:hover {
 }
 
 .delete-review-btn {
-    color: #ff00ff; /* Magenta for Delete */
+    color: #a105a1; /* Magenta for Delete */
 }
 
 .edit-review-btn:hover {
@@ -406,7 +408,7 @@ button[onclick^="deleteReview"]:hover {
 
 .review-author {
     font-weight: bold;
-    color: #00ff00;
+    color: #8c918c;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -885,4 +887,130 @@ button[id^="dislike-button"].active,
     font-size: 0.8em;
     color: #888;
     margin-top: 5px;
+}
+
+/* Update report button styling to match helpful/unhelpful buttons */
+.review-actions .report-review-btn {
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid #ffcc00;
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 0 4px;
+    transition: all 0.2s;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    text-transform: uppercase;
+    color: #b3b3b3;
+    box-shadow: 0 0 3px rgba(255, 204, 0, 0.3);
+}
+
+.review-actions .report-review-btn:hover {
+    background-color: rgba(255, 204, 0, 0.2);
+    color: #ffcc00;
+    box-shadow: 0 0 5px rgba(255, 204, 0, 0.7);
+}
+
+/* Report modal styling */
+.report-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.report-modal-content {
+    background: #000;
+    border: 2px solid #ffcc00;
+    padding: 20px;
+    width: 80%;
+    max-width: 500px;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+}
+
+.report-char-count {
+    display: block;
+    font-size: 12px;
+    margin-top: 5px;
+    font-family: 'Courier New', Courier, monospace;
+    color: #00ff00;
+}
+
+/* Add these rules at the end of your file */
+.description-toggle {
+    background: none;
+    border: none;
+    color: #00ffff;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    padding: 5px 10px;
+    margin-top: 10px;
+    text-decoration: underline;
+    transition: color 0.2s;
+}
+
+.description-toggle:hover {
+    color: #ff00ff;
+}
+
+.description-toggle.show-more::after {
+    content: " ↓";
+}
+
+.description-toggle.show-less::after {
+    content: " ↑";
+}
+
+.description-content {
+    transition: all 0.3s ease;
+}
+
+/* Ban User Button */
+.ban-user-btn {
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid #ff0000;
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 0 4px;
+    margin-left: 4px;
+    transition: all 0.2s;
+    cursor: pointer;
+    font-family: 'Courier New', Courier, monospace;
+    text-transform: uppercase;
+    color: #b3b3b3;
+    box-shadow: 0 0 3px rgba(255, 0, 0, 0.3);
+}
+
+.ban-user-btn:hover {
+    background-color: rgba(255, 0, 0, 0.2);
+    color: #ff0000;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.7);
+}
+
+/* Additional style for banned users */
+.review-banned {
+    position: relative;
+    opacity: 0.7;
+}
+
+.review-banned::after {
+    content: "BANNED";
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: #ff0000;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    border: 1px solid #ff0000;
+    padding: 2px 5px;
+    transform: rotate(15deg);
+    opacity: 0.8;
 }

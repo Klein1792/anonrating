@@ -25,6 +25,21 @@ function handleReviewActions($action, $db) {
         case 'getRecentReviews':
             return handleGetRecentReviews($db);
             
+        case 'reportReview':
+            return handleReportReview($db);
+            
+        case 'getReportedReviews':
+            return handleGetReportedReviews($db);
+            
+        case 'updateReportStatus':
+            return handleUpdateReportStatus($db);
+            
+        case 'adminDeleteReview':
+            return handleAdminDeleteReview($db);
+            
+        case 'getReportDetails':
+            return handleGetReportDetails($db);
+            
         default:
             return false;
     }
@@ -413,11 +428,15 @@ function handleGetReviewsByGame($db) {
     
     // Get reviews
     $stmt = $db->prepare("
-        SELECT r.*, u.username, u.is_admin, u.is_moderator
+        SELECT r.*, 
+               u.username, u.is_admin, u.is_moderator, u.is_banned,
+               a.is_banned AS anonymous_is_banned,
+               r.anonymous_token
         FROM reviews r
         LEFT JOIN users u ON r.user_id = u.id
+        LEFT JOIN anonymous_users a ON r.anonymous_token = a.token
         WHERE r.game_id = ?
-        ORDER BY r.$sortField $sortDirection
+        ORDER BY $sortField $sortDirection
         LIMIT ?, ?
     ");
     
@@ -433,6 +452,13 @@ function handleGetReviewsByGame($db) {
     
     // Get user identifier for checking ownership
     $userIdentifier = getCurrentUserIdentifier($db);
+    
+    // ADD THIS CODE: Check if current user is admin or moderator
+    $isAdminOrMod = false;
+    if ($userIdentifier['type'] === 'user_id') {
+        $isAdminOrMod = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] || 
+                       isset($_SESSION['is_moderator']) && $_SESSION['is_moderator'];
+    }
     
     $reviews = [];
     while ($row = $result->fetch_assoc()) {
@@ -463,7 +489,9 @@ function handleGetReviewsByGame($db) {
             'game_id' => (int)$row['game_id'],
             'user_id' => $row['user_id'] ? (int)$row['user_id'] : null,
             'display_name' => $row['username'] ?? $row['display_name'],
-            'is_anonymous' => !$row['user_id'],
+            'is_anonymous' => !empty($row['anonymous_token']),
+            'anonymous_token' => ($isAdminOrMod && $row['anonymous_token']) ? $row['anonymous_token'] : null,
+            'is_banned' => (bool)($row['is_banned'] ?? $row['anonymous_is_banned'] ?? false),
             'is_admin' => (bool)($row['is_admin'] ?? false),
             'is_moderator' => (bool)($row['is_moderator'] ?? false),
             'title' => $row['title'],
@@ -545,6 +573,311 @@ function handleGetRecentReviews($db) {
     echo json_encode([
         'success' => true,
         'reviews' => $reviews
+    ]);
+    
+    return true;
+}
+
+/**
+ * Handle reporting a review as inappropriate
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleReportReview($db) {
+    // Get user identifier (registered user or anonymous)
+    $userIdentifier = getCurrentUserIdentifier($db);
+    
+    // Parse request body
+    $json = file_get_contents('php://input');
+    $data = json_decode($json, true);
+    
+    if (!$data || !isset($data['reviewId']) || !isset($data['reason'])) {
+        echo json_encode(['success' => false, 'error' => 'Missing required fields']);
+        return true;
+    }
+    
+    $reviewId = (int)$data['reviewId'];
+    $reason = $data['reason'];
+    $details = $data['details'] ?? '';
+    
+    // Check if this review exists
+    $stmt = $db->prepare('SELECT id FROM reviews WHERE id = ?');
+    $stmt->bind_param('i', $reviewId);
+    $stmt->execute();
+    if ($stmt->get_result()->num_rows === 0) {
+        echo json_encode(['success' => false, 'error' => 'Review not found']);
+        return true;
+    }
+    
+    // Check if user has already reported this review
+    $stmt = $db->prepare('SELECT id FROM review_reports 
+                         WHERE review_id = ? AND reporter_type = ? AND reporter_value = ?');
+                         
+    $stmt->bind_param('iss', $reviewId, $userIdentifier['type'], $userIdentifier['value']);
+    $stmt->execute();
+    
+    if ($stmt->get_result()->num_rows > 0) {
+        echo json_encode(['success' => false, 'error' => 'You have already reported this review']);
+        return true;
+    }
+    
+    // Insert the report
+    $stmt = $db->prepare('INSERT INTO review_reports 
+                        (review_id, reporter_type, reporter_value, reason, details) 
+                        VALUES (?, ?, ?, ?, ?)');
+                        
+    $stmt->bind_param('issss', $reviewId, $userIdentifier['type'], $userIdentifier['value'], $reason, $details);
+    
+    if ($stmt->execute()) {
+        echo json_encode(['success' => true, 'message' => 'Review reported successfully']);
+        return true;
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Failed to report review: ' . $db->error]);
+        return true;
+    }
+}
+
+/**
+ * Handle getting reported reviews for admins
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleGetReportedReviews($db) {
+    // First check if the user is an admin or moderator
+    $user_id = $_SESSION['user_id'] ?? 0;
+    $stmt = $db->prepare('SELECT is_admin, is_moderator FROM users WHERE id = ?');
+    $stmt->bind_param('i', $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized: User not found']);
+        return true;
+    }
+    
+    $user = $result->fetch_assoc();
+    if (!$user['is_admin'] && !$user['is_moderator']) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized: Admin or moderator required']);
+        return true;
+    }
+    
+    // Pagination
+    $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+    $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
+    $offset = ($page - 1) * $limit;
+    
+    // Count total reports
+    $countStmt = $db->prepare('SELECT COUNT(*) as total FROM review_reports');
+    $countStmt->execute();
+    $totalResult = $countStmt->get_result();
+    $totalReports = $totalResult->fetch_assoc()['total'];
+    $totalPages = ceil($totalReports / $limit);
+    
+    // Get reports with related data
+    $stmt = $db->prepare("
+        SELECT r.id, r.review_id, r.reporter_type, r.reporter_value, r.reason, r.details, 
+               r.status, r.created_at, r.updated_at, 
+               rv.content as review_content, rv.game_id,
+               g.name as game_name,
+               CASE 
+                    WHEN r.reporter_type = 'user_id' THEN u.username
+                    ELSE NULL
+               END as reporter_name
+        FROM review_reports r
+        JOIN reviews rv ON r.review_id = rv.id
+        JOIN games g ON rv.game_id = g.id
+        LEFT JOIN users u ON r.reporter_type = 'user_id' AND r.reporter_value = u.id
+        ORDER BY 
+            CASE 
+                WHEN r.status = 'pending' THEN 1
+                WHEN r.status = 'reviewing' THEN 2
+                WHEN r.status = 'rejected' THEN 3
+                WHEN r.status = 'actioned' THEN 4
+                ELSE 5
+            END,
+            r.created_at DESC
+        LIMIT ? OFFSET ?
+    ");
+    $stmt->bind_param('ii', $limit, $offset);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $reports = [];
+    while ($row = $result->fetch_assoc()) {
+        $reports[] = $row;
+    }
+    
+    echo json_encode([
+        'success' => true,
+        'reports' => $reports,
+        'total_reports' => $totalReports,
+        'total_pages' => $totalPages,
+        'current_page' => $page
+    ]);
+    return true;
+}
+
+/**
+ * Handle updating report status
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleUpdateReportStatus($db) {
+    // First check if the user is an admin or moderator
+    $user_id = $_SESSION['user_id'] ?? 0;
+    $stmt = $db->prepare('SELECT is_admin, is_moderator FROM users WHERE id = ?');
+    $stmt->bind_param('i', $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized: User not found']);
+        return true;
+    }
+    
+    $user = $result->fetch_assoc();
+    if (!$user['is_admin'] && !$user['is_moderator']) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized: Admin or moderator required']);
+        return true;
+    }
+    
+    $reportId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+    $status = isset($_GET['status']) ? $_GET['status'] : '';
+    
+    if (empty($reportId) || empty($status)) {
+        echo json_encode(['success' => false, 'error' => 'Missing required parameters']);
+        return true;
+    }
+    
+    // Validate status
+    $validStatuses = ['pending', 'reviewing', 'rejected', 'actioned'];
+    if (!in_array($status, $validStatuses)) {
+        echo json_encode(['success' => false, 'error' => 'Invalid status']);
+        return true;
+    }
+    
+    // Update report status
+    $stmt = $db->prepare('UPDATE review_reports SET status = ?, handled_by = ? WHERE id = ?');
+    $stmt->bind_param('sii', $status, $user_id, $reportId);
+    $result = $stmt->execute();
+    
+    if ($result) {
+        echo json_encode(['success' => true, 'message' => 'Report status updated']);
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Failed to update report: ' . $db->error]);
+    }
+    
+    return true;
+}
+
+/**
+ * Handle admin deletion of a review
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleAdminDeleteReview($db) {
+    // First check if the user is an admin or moderator
+    $user_id = $_SESSION['user_id'] ?? 0;
+    $stmt = $db->prepare('SELECT is_admin, is_moderator FROM users WHERE id = ?');
+    $stmt->bind_param('i', $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized: User not found']);
+        return true;
+    }
+    
+    $user = $result->fetch_assoc();
+    if (!$user['is_admin'] && !$user['is_moderator']) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized: Admin or moderator required']);
+        return true;
+    }
+    
+    $reviewId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+    
+    if (empty($reviewId)) {
+        echo json_encode(['success' => false, 'error' => 'Missing review ID']);
+        return true;
+    }
+    
+    // Delete the review
+    $stmt = $db->prepare('DELETE FROM reviews WHERE id = ?');
+    $stmt->bind_param('i', $reviewId);
+    $result = $stmt->execute();
+    
+    if ($result) {
+        echo json_encode(['success' => true, 'message' => 'Review successfully removed']);
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Failed to delete review: ' . $db->error]);
+    }
+    
+    return true;
+}
+
+/**
+ * Get detailed information about a specific report
+ * 
+ * @param object $db Database connection
+ * @return bool True if handled
+ */
+function handleGetReportDetails($db) {
+    // First check if the user is an admin or moderator
+    $user_id = $_SESSION['user_id'] ?? 0;
+    $stmt = $db->prepare('SELECT is_admin, is_moderator FROM users WHERE id = ?');
+    $stmt->bind_param('i', $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0 || !($user = $result->fetch_assoc()) || (!$user['is_admin'] && !$user['is_moderator'])) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+        return true;
+    }
+    
+    $reportId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+    
+    if (empty($reportId)) {
+        echo json_encode(['success' => false, 'error' => 'Missing report ID']);
+        return true;
+    }
+    
+    // Get full report details
+    $stmt = $db->prepare("
+        SELECT r.id, r.review_id, r.reporter_type, r.reporter_value, r.reason, r.details, 
+               r.status, r.created_at, r.updated_at, 
+               rv.content as review_content, rv.game_id, rv.user_id as reviewer_id,
+               g.name as game_name,
+               CASE 
+                    WHEN r.reporter_type = 'user_id' THEN u_reporter.username
+                    ELSE NULL
+               END as reporter_name,
+               u_reviewer.username as reviewer_name
+        FROM review_reports r
+        JOIN reviews rv ON r.review_id = rv.id
+        JOIN games g ON rv.game_id = g.id
+        JOIN users u_reviewer ON rv.user_id = u_reviewer.id
+        LEFT JOIN users u_reporter ON r.reporter_type = 'user_id' AND r.reporter_value = u_reporter.id
+        WHERE r.id = ?
+    ");
+    
+    $stmt->bind_param('i', $reportId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        echo json_encode(['success' => false, 'error' => 'Report not found']);
+        return true;
+    }
+    
+    $report = $result->fetch_assoc();
+    
+    echo json_encode([
+        'success' => true,
+        'report' => $report
     ]);
     
     return true;

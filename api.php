@@ -69,7 +69,8 @@ try {
         'voteReview',
         'addReview',
         'editReview',
-        'deleteReview'
+        'deleteReview',
+        'reportReview'
     ];
     
     // Define admin-only actions
@@ -88,7 +89,11 @@ try {
         'addGame',
         'getAnonymousUsers',
         'banAnonymousUser',
-        'unbanAnonymousUser'
+        'unbanAnonymousUser',
+        'getReportedReviews',
+        'getReportDetails',     // Add this
+        'updateReportStatus',    // Add this 
+        'adminDeleteReview'      // Add this
     ];
     
     // Check if the current action requires authentication
