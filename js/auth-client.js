@@ -428,7 +428,7 @@
                 credentials: 'include' // Important for sending cookies
             });
             
-            // Manually clear cookies on the client side as well
+            // Manually clear cookies on the client side (except anonymous_token)
             document.cookie = 'access_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
             document.cookie = 'refresh_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
             document.cookie = 'access_token=; Path=/gamerating; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
@@ -445,8 +445,8 @@
                 tokenRefreshTimer = null;
             }
             
-            // Create new anonymous session
-            await createAnonymousSession();
+            // Do NOT create a new anonymous session; reuse the existing anonymous_token
+            // await createAnonymousSession();
             
             // Update UI
             updateAuthUI();

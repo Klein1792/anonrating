@@ -411,11 +411,29 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
         }
         
         $stmt = $db->prepare('SELECT likes, dislikes, approval_percent, avg_rating, review_count FROM games WHERE id = ?');
-        $stmt->bind_param('i', $game_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
+        if (!$stmt) {
+            error_log("Prepare failed: " . $db->error);
+            echo json_encode(['success' => false, 'error' => 'Database error: ' . $db->error]);
+            return true;
+        }
         
-        if ($result && $result->num_rows > 0) {
+        $stmt->bind_param('i', $game_id);
+        if (!$stmt->execute()) {
+            error_log("Execute failed: " . $stmt->error);
+            $stmt->close();
+            echo json_encode(['success' => false, 'error' => 'Database error: ' . $stmt->error]);
+            return true;
+        }
+        
+        $result = $stmt->get_result();
+        if (!$result) {
+            error_log("Get result failed: " . $db->error);
+            $stmt->close();
+            echo json_encode(['success' => false, 'error' => 'Database error: ' . $db->error]);
+            return true;
+        }
+        
+        if ($result->num_rows > 0) {
             $row = $result->fetch_assoc();
             $voteData = [
                 'likes' => (int)$row['likes'],
@@ -440,6 +458,8 @@ function handleIgdbActions($action, $db, $client_id, $client_secret) {
                 ]
             ]);
         }
+        
+        $stmt->close();
         return true;
     }
     // No handler matched

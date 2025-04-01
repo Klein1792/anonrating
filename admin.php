@@ -143,6 +143,30 @@ if (!$user['is_admin']) {
                 </tbody>
             </table>
         </div>
+        <div style="text-align: center; margin: 20px;">
+            <h3 style="color: #00ff00; text-shadow: 2px 2px #ff00ff; font-family: 'Courier New', Courier, monospace;">Anonymous Users</h3>
+            <table style="margin: 0 auto; border-collapse: collapse; width: 80%;">
+                <thead>
+                    <tr>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">ID</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">IP Address</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">First Seen</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Last Seen</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Linked User</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Status</th>
+                        <th style="border: 2px solid #ff00ff; padding: 8px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="anonymous-table">
+                    <!-- Anonymous users will be populated here by JavaScript -->
+                </tbody>
+            </table>
+            <div style="text-align: center; margin: 20px;">
+                <button id="anon-prev-page" disabled>Previous</button>
+                <span id="anon-page-info">Page 1 of 1</span>
+                <button id="anon-next-page" disabled>Next</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -471,11 +495,135 @@ if (!$user['is_admin']) {
         return metaTag ? metaTag.content : "";
     }
 
+    // Anonymous Users Management
+    let anonCurrentPage = 1;
+    const anonUsersPerPage = 10;
+
+    function loadAnonymousUsers(page = 1) {
+        anonCurrentPage = page;
+        fetch(`${baseUrl}/api.php?action=getAnonymousUsers&page=${page}&limit=${anonUsersPerPage}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = 'login.php';
+                        throw new Error('Unauthorized: Please log in');
+                    }
+                    throw new Error('Failed to fetch anonymous users: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const anonTable = document.getElementById('anonymous-table');
+                anonTable.innerHTML = '';
+                
+                if (!data.anonymous_users || data.anonymous_users.length === 0) {
+                    anonTable.innerHTML = `<tr><td colspan="7" style="color: #00ff00; text-align: center;">No anonymous users found</td></tr>`;
+                    return;
+                }
+                
+                data.anonymous_users.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${user.id}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${user.ip_address || 'Unknown'}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${user.first_seen}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${user.last_seen}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${user.username || 'None'}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">${user.is_banned ? 
+                            '<span style="color: #ff0000;">Banned</span>' : 
+                            '<span style="color: #00ff00;">Active</span>'}</td>
+                        <td style="border: 2px solid #ff00ff; padding: 8px;">
+                            <button onclick="toggleAnonBan('${user.token}', ${user.is_banned})">${user.is_banned ? 'Unban' : 'Ban'}</button>
+                        </td>
+                    `;
+                    anonTable.appendChild(row);
+                });
+
+                // Update pagination
+                document.getElementById('anon-page-info').textContent = `Page ${data.current_page} of ${data.total_pages || 1}`;
+                document.getElementById('anon-prev-page').disabled = data.current_page <= 1;
+                document.getElementById('anon-next-page').disabled = data.current_page >= (data.total_pages || 1);
+            })
+            .catch(error => {
+                console.error('Error fetching anonymous users:', error);
+                document.getElementById('anonymous-table').innerHTML = 
+                    `<tr><td colspan="7" style="color: #ff00ff; text-align: center;">Error: ${error.message}</td></tr>`;
+            });
+    }
+
+    function toggleAnonBan(token, isBanned) {
+        fetch(`${baseUrl}/api.php?action=${isBanned ? 'unbanAnonymousUser' : 'banAnonymousUser'}&token=${token}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-CSRF-Token': getCsrfToken() || ""
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = 'login.php';
+                        throw new Error('Unauthorized: Please log in');
+                    }
+                    throw new Error('Failed to toggle anonymous ban: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    showNotification('Error: ' + data.error);
+                } else {
+                    showNotification(data.message || 'Anonymous user status updated');
+                    loadAnonymousUsers(anonCurrentPage);
+                }
+            })
+            .catch(error => showNotification('Error: ' + error.message));
+    }
+
+    // Set up pagination buttons for anonymous users
+    document.getElementById('anon-prev-page').addEventListener('click', () => {
+        if (anonCurrentPage > 1) {
+            loadAnonymousUsers(anonCurrentPage - 1);
+        }
+    });
+
+    document.getElementById('anon-next-page').addEventListener('click', () => {
+        loadAnonymousUsers(anonCurrentPage + 1);
+    });
+
     // Load statistics and users when the page loads
     loadStatistics();
     loadUsers();
     loadModerators();
     loadAdmins();
+    loadAnonymousUsers();
+
+    // Add this if you don't already have a showNotification function
+    function showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        notification.style.position = 'fixed';
+        notification.style.top = '20px';
+        notification.style.right = '20px';
+        notification.style.padding = '10px';
+        notification.style.background = type === 'error' ? '#ff5555' : '#00ff00';
+        notification.style.color = '#000';
+        notification.style.borderRadius = '5px';
+        notification.style.zIndex = '1000';
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
     </script>
 </body>
 </html>

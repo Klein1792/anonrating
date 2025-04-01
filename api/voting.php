@@ -54,40 +54,39 @@ function handleGameVote($db) {
     }
       
     // Get user identifier (registered user or anonymous)
-    $userIdentifier = getCurrentUserIdentifier();
+    $userIdentifier = getCurrentUserIdentifier($db);
     
     try {
         $db->begin_transaction();
         
+        // Check if the user has already voted (using both user_id and anonymous_token)
+        $existingVote = null;
+        $voteId = null;
+        
         if ($userIdentifier['type'] === 'user_id') {
-            // Registered user
             $userId = $userIdentifier['value'];
+            $anonymousToken = $userIdentifier['anonymous_token'];
             
-            // Check if the user already voted
-            $stmt = $db->prepare('SELECT id, vote FROM game_votes WHERE game_id = ? AND user_id = ?');
-            $stmt->bind_param('ii', $gameId, $userId);
+            // Check for votes by user_id or associated anonymous_token
+            $query = 'SELECT id, vote FROM game_votes WHERE game_id = ? AND (user_id = ?';
+            $params = [$gameId, $userId];
+            $types = 'ii';
+            
+            if ($anonymousToken) {
+                $query .= ' OR anonymous_token = ?';
+                $params[] = $anonymousToken;
+                $types .= 's';
+            }
+            $query .= ')';
+            
+            $stmt = $db->prepare($query);
+            $stmt->bind_param($types, ...$params);
             $stmt->execute();
             $result = $stmt->get_result();
             
             if ($result->num_rows > 0) {
-                // Update existing vote
-                $existing = $result->fetch_assoc();
-                if ((int)$existing['vote'] === $vote) {
-                    // Same vote, remove it (toggle behavior)
-                    $stmt = $db->prepare('DELETE FROM game_votes WHERE id = ?');
-                    $stmt->bind_param('i', $existing['id']);
-                    $stmt->execute();
-                } else {
-                    // Different vote, update it
-                    $stmt = $db->prepare('UPDATE game_votes SET vote = ?, updated_at = NOW() WHERE id = ?');
-                    $stmt->bind_param('ii', $vote, $existing['id']);
-                    $stmt->execute();
-                }
-            } else {
-                // Insert new vote
-                $stmt = $db->prepare('INSERT INTO game_votes (game_id, user_id, vote) VALUES (?, ?, ?)');
-                $stmt->bind_param('iii', $gameId, $userId, $vote);
-                $stmt->execute();
+                $existingVote = $result->fetch_assoc();
+                $voteId = $existingVote['id'];
             }
         } else {
             // Anonymous user
@@ -99,35 +98,46 @@ function handleGameVote($db) {
                 $anonymousToken = $anonymousUser['anonymous_token'];
             }
             
-            // Check if the anonymous user already voted
+            // Check for votes by anonymous_token
             $stmt = $db->prepare('SELECT id, vote FROM game_votes WHERE game_id = ? AND anonymous_token = ?');
             $stmt->bind_param('is', $gameId, $anonymousToken);
             $stmt->execute();
             $result = $stmt->get_result();
             
             if ($result->num_rows > 0) {
-                // Update existing vote
-                $existing = $result->fetch_assoc();
-                if ((int)$existing['vote'] === $vote) {
-                    // Same vote, remove it (toggle behavior)
-                    $stmt = $db->prepare('DELETE FROM game_votes WHERE id = ?');
-                    $stmt->bind_param('i', $existing['id']);
-                    $stmt->execute();
-                } else {
-                    // Different vote, update it
-                    $stmt = $db->prepare('UPDATE game_votes SET vote = ?, updated_at = NOW() WHERE id = ?');
-                    $stmt->bind_param('ii', $vote, $existing['id']);
-                    $stmt->execute();
-                }
-            } else {
-                // Insert new vote
-                $stmt = $db->prepare('INSERT INTO game_votes (game_id, anonymous_token, vote) VALUES (?, ?, ?)');
-                $stmt->bind_param('isi', $gameId, $anonymousToken, $vote);
-                $stmt->execute();
+                $existingVote = $result->fetch_assoc();
+                $voteId = $existingVote['id'];
             }
         }
         
-        // Replace the manual vote count calculation with a direct query from games table
+        if ($existingVote) {
+            // Update existing vote
+            if ((int)$existingVote['vote'] === $vote) {
+                // Same vote, remove it (toggle behavior)
+                $stmt = $db->prepare('DELETE FROM game_votes WHERE id = ?');
+                $stmt->bind_param('i', $voteId);
+                $stmt->execute();
+            } else {
+                // Different vote, update it
+                $stmt = $db->prepare('UPDATE game_votes SET vote = ?, updated_at = NOW() WHERE id = ?');
+                $stmt->bind_param('ii', $vote, $voteId);
+                $stmt->execute();
+            }
+        } else {
+            // Insert new vote
+            if ($userIdentifier['type'] === 'user_id') {
+                $userId = $userIdentifier['value'];
+                $stmt = $db->prepare('INSERT INTO game_votes (game_id, user_id, vote) VALUES (?, ?, ?)');
+                $stmt->bind_param('iii', $gameId, $userId, $vote);
+            } else {
+                $anonymousToken = $userIdentifier['value'];
+                $stmt = $db->prepare('INSERT INTO game_votes (game_id, anonymous_token, vote) VALUES (?, ?, ?)');
+                $stmt->bind_param('isi', $gameId, $anonymousToken, $vote);
+            }
+            $stmt->execute();
+        }
+        
+        // Fetch updated vote counts from games table
         $stmt = $db->prepare('
             SELECT 
                 likes,
@@ -173,12 +183,25 @@ function handleCheckUserVote($db) {
         return true;
     }
     
-    $userIdentifier = getCurrentUserIdentifier();
+    $userIdentifier = getCurrentUserIdentifier($db);
+    
+    $query = 'SELECT vote FROM game_votes WHERE game_id = ? AND (';
+    $params = [$gameId];
+    $types = 'i';
     
     if ($userIdentifier['type'] === 'user_id') {
         $userId = $userIdentifier['value'];
-        $stmt = $db->prepare('SELECT vote FROM game_votes WHERE game_id = ? AND user_id = ?');
-        $stmt->bind_param('ii', $gameId, $userId);
+        $anonymousToken = $userIdentifier['anonymous_token'];
+        
+        $query .= 'user_id = ?';
+        $params[] = $userId;
+        $types .= 'i';
+        
+        if ($anonymousToken) {
+            $query .= ' OR anonymous_token = ?';
+            $params[] = $anonymousToken;
+            $types .= 's';
+        }
     } else {
         $anonymousToken = $userIdentifier['value'];
         
@@ -187,10 +210,15 @@ function handleCheckUserVote($db) {
             return true;
         }
         
-        $stmt = $db->prepare('SELECT vote FROM game_votes WHERE game_id = ? AND anonymous_token = ?');
-        $stmt->bind_param('is', $gameId, $anonymousToken);
+        $query .= 'anonymous_token = ?';
+        $params[] = $anonymousToken;
+        $types .= 's';
     }
     
+    $query .= ')';
+    
+    $stmt = $db->prepare($query);
+    $stmt->bind_param($types, ...$params);
     $stmt->execute();
     $result = $stmt->get_result();
     
@@ -286,7 +314,7 @@ function handleReviewVote($db) {
         return true;
     }
     
-    $userIdentifier = getCurrentUserIdentifier();
+    $userIdentifier = getCurrentUserIdentifier($db);
     error_log("User identifier: " . json_encode($userIdentifier));
     
     $voteValue = $isHelpful ? 1 : 0;
@@ -324,49 +352,33 @@ function handleReviewVote($db) {
             return true;
         }
         
+        // Check for existing votes (using both user_id and anonymous_token)
+        $existingVote = null;
+        $voteId = null;
+        
         if ($userIdentifier['type'] === 'user_id') {
             $userId = $userIdentifier['value'];
+            $anonymousToken = $userIdentifier['anonymous_token'];
             
-            $stmt = $db->prepare('SELECT id, is_helpful FROM review_votes WHERE review_id = ? AND user_id = ?');
-            if (!$stmt) {
-                throw new Exception("Failed to prepare select review vote query: " . $db->error);
+            $query = 'SELECT id, is_helpful FROM review_votes WHERE review_id = ? AND (user_id = ?';
+            $params = [$reviewId, $userId];
+            $types = 'ii';
+            
+            if ($anonymousToken) {
+                $query .= ' OR anonymous_token = ?';
+                $params[] = $anonymousToken;
+                $types .= 's';
             }
-            $stmt->bind_param('ii', $reviewId, $userId);
-            if (!$stmt->execute()) {
-                throw new Exception("Failed to execute select review vote query: " . $stmt->error);
-            }
+            $query .= ')';
+            
+            $stmt = $db->prepare($query);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
             $result = $stmt->get_result();
             
             if ($result->num_rows > 0) {
-                $existing = $result->fetch_assoc();
-                if ((int)$existing['is_helpful'] === $voteValue) {
-                    $stmt = $db->prepare('DELETE FROM review_votes WHERE id = ?');
-                    if (!$stmt) {
-                        throw new Exception("Failed to prepare delete review vote query: " . $db->error);
-                    }
-                    $stmt->bind_param('i', $existing['id']);
-                    if (!$stmt->execute()) {
-                        throw new Exception("Failed to execute delete review vote query: " . $stmt->error);
-                    }
-                } else {
-                    $stmt = $db->prepare('UPDATE review_votes SET is_helpful = ?, updated_at = NOW() WHERE id = ?');
-                    if (!$stmt) {
-                        throw new Exception("Failed to prepare update review vote query: " . $db->error);
-                    }
-                    $stmt->bind_param('ii', $voteValue, $existing['id']);
-                    if (!$stmt->execute()) {
-                        throw new Exception("Failed to execute update review vote query: " . $stmt->error);
-                    }
-                }
-            } else {
-                $stmt = $db->prepare('INSERT INTO review_votes (review_id, user_id, is_helpful) VALUES (?, ?, ?)');
-                if (!$stmt) {
-                    throw new Exception("Failed to prepare insert review vote query: " . $db->error);
-                }
-                $stmt->bind_param('iii', $reviewId, $userId, $voteValue);
-                if (!$stmt->execute()) {
-                    throw new Exception("Failed to execute insert review vote query: " . $stmt->error);
-                }
+                $existingVote = $result->fetch_assoc();
+                $voteId = $existingVote['id'];
             }
         } else {
             $anonymousToken = $userIdentifier['value'];
@@ -377,57 +389,45 @@ function handleReviewVote($db) {
             }
             
             $stmt = $db->prepare('SELECT id, is_helpful FROM review_votes WHERE review_id = ? AND anonymous_token = ?');
-            if (!$stmt) {
-                throw new Exception("Failed to prepare select review vote query (anonymous): " . $db->error);
-            }
             $stmt->bind_param('is', $reviewId, $anonymousToken);
-            if (!$stmt->execute()) {
-                throw new Exception("Failed to execute select review vote query (anonymous): " . $stmt->error);
-            }
+            $stmt->execute();
             $result = $stmt->get_result();
             
             if ($result->num_rows > 0) {
-                $existing = $result->fetch_assoc();
-                if ((int)$existing['is_helpful'] === $voteValue) {
-                    $stmt = $db->prepare('DELETE FROM review_votes WHERE id = ?');
-                    if (!$stmt) {
-                        throw new Exception("Failed to prepare delete review vote query (anonymous): " . $db->error);
-                    }
-                    $stmt->bind_param('i', $existing['id']);
-                    if (!$stmt->execute()) {
-                        throw new Exception("Failed to execute delete review vote query (anonymous): " . $stmt->error);
-                    }
-                } else {
-                    $stmt = $db->prepare('UPDATE review_votes SET is_helpful = ?, updated_at = NOW() WHERE id = ?');
-                    if (!$stmt) {
-                        throw new Exception("Failed to prepare update review vote query (anonymous): " . $db->error);
-                    }
-                    $stmt->bind_param('ii', $voteValue, $existing['id']);
-                    if (!$stmt->execute()) {
-                        throw new Exception("Failed to execute update review vote query (anonymous): " . $stmt->error);
-                    }
-                }
-            } else {
-                $stmt = $db->prepare('INSERT INTO review_votes (review_id, anonymous_token, is_helpful) VALUES (?, ?, ?)');
-                if (!$stmt) {
-                    throw new Exception("Failed to prepare insert review vote query (anonymous): " . $db->error);
-                }
-                $stmt->bind_param('isi', $reviewId, $anonymousToken, $voteValue);
-                if (!$stmt->execute()) {
-                    throw new Exception("Failed to execute insert review vote query (anonymous): " . $stmt->error);
-                }
+                $existingVote = $result->fetch_assoc();
+                $voteId = $existingVote['id'];
             }
+        }
+        
+        if ($existingVote) {
+            // Update existing vote
+            if ((int)$existingVote['is_helpful'] === $voteValue) {
+                $stmt = $db->prepare('DELETE FROM review_votes WHERE id = ?');
+                $stmt->bind_param('i', $voteId);
+                $stmt->execute();
+            } else {
+                $stmt = $db->prepare('UPDATE review_votes SET is_helpful = ?, updated_at = NOW() WHERE id = ?');
+                $stmt->bind_param('ii', $voteValue, $voteId);
+                $stmt->execute();
+            }
+        } else {
+            // Insert new vote
+            if ($userIdentifier['type'] === 'user_id') {
+                $userId = $userIdentifier['value'];
+                $stmt = $db->prepare('INSERT INTO review_votes (review_id, user_id, is_helpful) VALUES (?, ?, ?)');
+                $stmt->bind_param('iii', $reviewId, $userId, $voteValue);
+            } else {
+                $anonymousToken = $userIdentifier['value'];
+                $stmt = $db->prepare('INSERT INTO review_votes (review_id, anonymous_token, is_helpful) VALUES (?, ?, ?)');
+                $stmt->bind_param('isi', $reviewId, $anonymousToken, $voteValue);
+            }
+            $stmt->execute();
         }
         
         // Fetch updated counts (triggers will have updated them)
         $stmt = $db->prepare('SELECT helpful_votes, not_helpful_votes FROM reviews WHERE id = ?');
-        if (!$stmt) {
-            throw new Exception("Failed to prepare fetch counts query: " . $db->error);
-        }
         $stmt->bind_param('i', $reviewId);
-        if (!$stmt->execute()) {
-            throw new Exception("Failed to execute fetch counts query: " . $stmt->error);
-        }
+        $stmt->execute();
         $result = $stmt->get_result();
         $counts = $result->fetch_assoc();
         
@@ -467,12 +467,25 @@ function handleCheckReviewVote($db) {
         return true;
     }
     
-    $userIdentifier = getCurrentUserIdentifier();
+    $userIdentifier = getCurrentUserIdentifier($db);
+    
+    $query = 'SELECT is_helpful FROM review_votes WHERE review_id = ? AND (';
+    $params = [$reviewId];
+    $types = 'i';
     
     if ($userIdentifier['type'] === 'user_id') {
         $userId = $userIdentifier['value'];
-        $stmt = $db->prepare('SELECT is_helpful FROM review_votes WHERE review_id = ? AND user_id = ?');
-        $stmt->bind_param('ii', $reviewId, $userId);
+        $anonymousToken = $userIdentifier['anonymous_token'];
+        
+        $query .= 'user_id = ?';
+        $params[] = $userId;
+        $types .= 'i';
+        
+        if ($anonymousToken) {
+            $query .= ' OR anonymous_token = ?';
+            $params[] = $anonymousToken;
+            $types .= 's';
+        }
     } else {
         $anonymousToken = $userIdentifier['value'];
         
@@ -484,10 +497,15 @@ function handleCheckReviewVote($db) {
             return true;
         }
         
-        $stmt = $db->prepare('SELECT is_helpful FROM review_votes WHERE review_id = ? AND anonymous_token = ?');
-        $stmt->bind_param('is', $reviewId, $anonymousToken);
+        $query .= 'anonymous_token = ?';
+        $params[] = $anonymousToken;
+        $types .= 's';
     }
     
+    $query .= ')';
+    
+    $stmt = $db->prepare($query);
+    $stmt->bind_param($types, ...$params);
     $stmt->execute();
     $result = $stmt->get_result();
     
@@ -507,3 +525,4 @@ function handleCheckReviewVote($db) {
     
     return true;
 }
+   

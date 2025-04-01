@@ -42,6 +42,27 @@
             updateAuthDependentUI(gameId);
             updateDisplayNameDropdown();
         });
+        
+        // Add special handling for the Top Rated tab to use user ratings by default
+        const topRatedTab = document.getElementById('top-rated-tab');
+        if (topRatedTab) {
+            topRatedTab.addEventListener('shown.bs.tab', function() {
+                // Only change sort if we're now showing the top-rated tab
+                const sortSelect = document.getElementById('sort-select');
+                if (sortSelect && sortSelect.value !== 'avg_rating') {
+                    // Set the select element value
+                    sortSelect.value = 'avg_rating';
+                    
+                    // Update the current sort and load tab
+                    currentSort = 'avg_rating';
+                    currentSortDirection = 'DESC'; // Highest ratings first
+                    
+                    // Only reload this specific tab to avoid reloading all tabs
+                    const tabConfig = tabs['top-rated'];
+                    loadTab(tabConfig, currentPage[tabConfig.id] || 1);
+                }
+            });
+        }
     });
     
     function setupChallengeSequence() {
@@ -247,6 +268,13 @@
     }
     
     function loadGameDetails(gameId) {
+        // Validate gameId
+        if (!gameId || isNaN(gameId) || parseInt(gameId) <= 0) {
+            console.error('Invalid gameId:', gameId);
+            showNotification('Invalid game ID. Unable to load game details.', 'error');
+            return;
+        }
+    
         // Try to get static content from cache first
         const cachedStaticData = window.GameCache?.getGameStatic(gameId);
         
@@ -259,30 +287,34 @@
             fetch(`${window.baseUrl}/api.php?action=getGameDynamicData&id=${gameId}`)
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error(`Failed to fetch dynamic data: ${response.status}`);
+                        throw new Error(`Failed to fetch dynamic data: ${response.status} ${response.statusText}`);
                     }
-                    return response.json();
+                    return response.text(); // Get raw text first to handle JSON parsing errors
                 })
-                .then(data => {
-                    if (data.success && data.dynamic) {
-                        // Update the dynamic parts of the page
-                        updateGameDynamic(data.dynamic);
-                    } else {
-                        console.warn('Invalid dynamic data response:', data);
-                        // Fallback: Use default dynamic data
-                        updateGameDynamic({
-                            likes: 0,
-                            dislikes: 0,
-                            approval_percent: 0,
-                            avg_rating: null,
-                            review_count: 0
-                        });
-                        showNotification('Failed to load dynamic game data. Showing default values.', 'error');
+                .then(text => {
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.success && data.dynamic) {
+                            // Update the dynamic parts of the page
+                            updateGameDynamic(data.dynamic);
+                        } else {
+                            console.warn('Invalid dynamic data response:', data, 'Raw response:', text);
+                            updateGameDynamic({
+                                likes: 0,
+                                dislikes: 0,
+                                approval_percent: 0,
+                                avg_rating: null,
+                                review_count: 0
+                            });
+                            showNotification('Failed to load dynamic game data. Showing default values.', 'error');
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse dynamic data response as JSON:', e, 'Raw response:', text);
+                        throw new Error('Invalid JSON response from server');
                     }
                 })
                 .catch(error => {
                     console.error('Error loading dynamic data:', error);
-                    // Fallback: Use default dynamic data
                     updateGameDynamic({
                         likes: 0,
                         dislikes: 0,
@@ -297,25 +329,31 @@
             fetch(`${window.baseUrl}/api.php?action=getGameDetails&id=${gameId}`)
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error(`Failed to fetch game details: ${response.status}`);
+                        throw new Error(`Failed to fetch game details: ${response.status} ${response.statusText}`);
                     }
-                    return response.json();
+                    return response.text();
                 })
-                .then(data => {
-                    if (data.success && data.game && data.game.static && data.game.dynamic) {
-                        const gameData = data.game;
-                        
-                        // Cache only the static part
-                        if (window.GameCache && gameData.static) {
-                            window.GameCache.saveGameStatic(gameId, gameData.static);
+                .then(text => {
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.success && data.game && data.game.static && data.game.dynamic) {
+                            const gameData = data.game;
+                            
+                            // Cache only the static part
+                            if (window.GameCache && gameData.static) {
+                                window.GameCache.saveGameStatic(gameId, gameData.static);
+                            }
+                            
+                            // Render everything
+                            renderGameStatic(gameData.static);
+                            updateGameDynamic(gameData.dynamic);
+                        } else {
+                            console.warn('Invalid game details response:', data, 'Raw response:', text);
+                            showNotification('Failed to load game details. Please try again later.', 'error');
                         }
-                        
-                        // Render everything
-                        renderGameStatic(gameData.static);
-                        updateGameDynamic(gameData.dynamic);
-                    } else {
-                        console.warn('Invalid game details response:', data);
-                        showNotification('Failed to load game details. Please try again later.', 'error');
+                    } catch (e) {
+                        console.error('Failed to parse game details response as JSON:', e, 'Raw response:', text);
+                        throw new Error('Invalid JSON response from server');
                     }
                 })
                 .catch(error => {
@@ -412,37 +450,42 @@
         checkUserVote(gameData.id);
     }
     
-    function updateGameDynamic(dynamicData) {
-        const ratingDiv = document.getElementById('game-rating');
-        if (ratingDiv) {
-            let userRatingText = 'anon Rating: N/A';
-            // Ensure avg_rating is a number and greater than 0
-            const avgRating = dynamicData.avg_rating != null ? parseFloat(dynamicData.avg_rating) : null;
-            if (avgRating != null && !isNaN(avgRating) && avgRating > 0) {
-                const formattedAvgRating = avgRating === 10 ? 10 : avgRating.toFixed(1);
-                userRatingText = `anon Rating: ${formattedAvgRating}/10 (${dynamicData.review_count} ${dynamicData.review_count === 1 ? 'review' : 'reviews'})`;
-            }
-            
-            const likes = dynamicData.likes || 0;
-            const dislikes = dynamicData.dislikes || 0;
-            const totalVotes = likes + dislikes;
-            const approvalPercent = dynamicData.approval_percent || 0;
-            
-            let approvalText = 'No votes yet';
-            if (totalVotes > 0) {
-                approvalText = `${Math.round(approvalPercent)}% (${likes}/${totalVotes}) approval`;
-            }
-            
-            ratingDiv.innerHTML = `
-                <div class="rating-container">
-                    <div class="user-rating">${userRatingText}</div>
-                    <div class="game-votes">${approvalText}</div>
-                </div>
-            `;
+    // update dynamic data
+function updateGameDynamic(dynamicData) {
+    const ratingDiv = document.getElementById('game-rating');
+    if (ratingDiv) {
+        // Get the existing IGDB rating if present
+        const existingIgdbRating = ratingDiv.querySelector('.igdb-rating');
+        const igdbRatingText = existingIgdbRating ? existingIgdbRating.textContent : 'IGDB Rating: N/A';
+        
+        let userRatingText = 'anon Rating: N/A';
+        // Ensure avg_rating is a number and greater than 0
+        const avgRating = dynamicData.avg_rating != null ? parseFloat(dynamicData.avg_rating) : null;
+        if (avgRating != null && !isNaN(avgRating) && avgRating > 0) {
+            userRatingText = `anon Rating: ${avgRating.toFixed(1)}/10 (${dynamicData.review_count} reviews)`;
         }
         
-        checkUserVote(dynamicData.id);
+        const likes = dynamicData.likes || 0;
+        const dislikes = dynamicData.dislikes || 0;
+        const totalVotes = likes + dislikes;
+        const approvalPercent = dynamicData.approval_percent || 0;
+        
+        let approvalText = 'No votes yet';
+        if (totalVotes > 0) {
+            approvalText = `${Math.round(approvalPercent)}% (${likes}/${totalVotes}) approval`;
+        }
+        
+        ratingDiv.innerHTML = `
+            <div class="rating-container">
+                <div class="igdb-rating">${igdbRatingText}</div>
+                <div class="user-rating">${userRatingText}</div>
+                <div class="game-votes">${approvalText}</div>
+            </div>
+        `;
     }
+    
+    checkUserVote(dynamicData.id);
+}
     
     function updateGameMetaSection(gameData) {
         const metaItems = document.querySelectorAll('.game-meta .meta-item');
@@ -1326,11 +1369,4 @@
         return fetch(url, fetchOptions);
     }
     
-    document.addEventListener('DOMContentLoaded', () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const gameId = urlParams.get('id');
-        if (gameId) {
-            setupReviewForm(gameId);
-        }
-    });
 })();

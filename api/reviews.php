@@ -56,18 +56,28 @@ function handleAddReview($db) {
         echo json_encode(['success' => false, 'error' => 'Invalid review data']);
         return true;
     } 
-    // Get user identifier (registered user or anonymous)
-    $userIdentifier = getCurrentUserIdentifier();
     
-    // Check if user already reviewed this game
-    $checkQuery = '';
-    $checkParams = [];
-    $checkTypes = '';
+    // Get user identifier (registered user or anonymous)
+    $userIdentifier = getCurrentUserIdentifier($db);
+    
+    // Check if user already reviewed this game (using both user_id and anonymous_token)
+    $checkQuery = 'SELECT id FROM reviews WHERE game_id = ? AND (';
+    $checkParams = [$gameId];
+    $checkTypes = 'i';
     
     if ($userIdentifier['type'] === 'user_id') {
-        $checkQuery = 'SELECT id FROM reviews WHERE game_id = ? AND user_id = ?';
-        $checkParams = [$gameId, $userIdentifier['value']];
-        $checkTypes = 'ii';
+        $userId = $userIdentifier['value'];
+        $anonymousToken = $userIdentifier['anonymous_token'];
+        
+        $checkQuery .= 'user_id = ?';
+        $checkParams[] = $userId;
+        $checkTypes .= 'i';
+        
+        if ($anonymousToken) {
+            $checkQuery .= ' OR anonymous_token = ?';
+            $checkParams[] = $anonymousToken;
+            $checkTypes .= 's';
+        }
     } else {
         $anonymousToken = $userIdentifier['value'];
         
@@ -77,10 +87,12 @@ function handleAddReview($db) {
             $anonymousToken = $anonymousUser['anonymous_token'];
         }
         
-        $checkQuery = 'SELECT id FROM reviews WHERE game_id = ? AND anonymous_token = ?';
-        $checkParams = [$gameId, $anonymousToken];
-        $checkTypes = 'is';
+        $checkQuery .= 'anonymous_token = ?';
+        $checkParams[] = $anonymousToken;
+        $checkTypes .= 's';
     }
+    
+    $checkQuery .= ')';
     
     $stmt = $db->prepare($checkQuery);
     $stmt->bind_param($checkTypes, ...$checkParams);
@@ -176,7 +188,7 @@ function handleEditReview($db) {
     }
     
     // Get user identifier (registered user or anonymous)
-    $userIdentifier = getCurrentUserIdentifier();
+    $userIdentifier = getCurrentUserIdentifier($db);
     
     // Check if user owns this review or is admin/moderator
     $ownerCheckQuery = 'SELECT game_id FROM reviews WHERE id = ? AND ';
@@ -283,7 +295,7 @@ function handleDeleteReview($db) {
     }
     
     // Get user identifier (registered user or anonymous)
-    $userIdentifier = getCurrentUserIdentifier();
+    $userIdentifier = getCurrentUserIdentifier($db);
     
     // Check if user owns this review or is admin/moderator
     $ownerCheckQuery = 'SELECT game_id FROM reviews WHERE id = ? AND ';
@@ -420,7 +432,7 @@ function handleGetReviewsByGame($db) {
     $totalReviews = (int)$countStmt->get_result()->fetch_assoc()['total'];
     
     // Get user identifier for checking ownership
-    $userIdentifier = getCurrentUserIdentifier();
+    $userIdentifier = getCurrentUserIdentifier($db);
     
     $reviews = [];
     while ($row = $result->fetch_assoc()) {
@@ -567,4 +579,3 @@ function updateGameRatingStats($db, $gameId) {
     $stmt->bind_param('dii', $avgRating, $reviewCount, $gameId);
     $stmt->execute();
 }
-

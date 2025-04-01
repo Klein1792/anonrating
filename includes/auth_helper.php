@@ -208,6 +208,38 @@ function createAuthTokens($db, $user_id, $username = null, $is_admin = false, $i
     $db->begin_transaction();
     
     try {
+        // Link the anonymous token to the user_id if an anonymous token exists
+        $anonymousToken = $_SESSION['anonymous_token'] ?? $_COOKIE['anonymous_token'] ?? null;
+        if ($anonymousToken) {
+            // Check if the anonymous token exists in anonymous_users
+            $stmt = $db->prepare('SELECT id FROM anonymous_users WHERE token = ? AND expires_at > NOW()');
+            $stmt->bind_param('s', $anonymousToken);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                // Insert the mapping into user_anonymous_mapping
+                $stmt = $db->prepare('INSERT INTO user_anonymous_mapping (anonymous_token, user_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE user_id = ?');
+                $stmt->bind_param('sii', $anonymousToken, $user_id, $user_id);
+                $stmt->execute();
+                
+                // Migrate existing votes in game_votes
+                $stmt = $db->prepare('UPDATE game_votes SET user_id = ?, anonymous_token = NULL WHERE anonymous_token = ?');
+                $stmt->bind_param('is', $user_id, $anonymousToken);
+                $stmt->execute();
+                
+                // Migrate existing votes in review_votes
+                $stmt = $db->prepare('UPDATE review_votes SET user_id = ?, anonymous_token = NULL WHERE anonymous_token = ?');
+                $stmt->bind_param('is', $user_id, $anonymousToken);
+                $stmt->execute();
+                
+                // Migrate existing reviews in reviews
+                $stmt = $db->prepare('UPDATE reviews SET user_id = ?, anonymous_token = NULL WHERE anonymous_token = ?');
+                $stmt->bind_param('is', $user_id, $anonymousToken);
+                $stmt->execute();
+            }
+        }
+        
         // Delete old refresh tokens for this user (single-session policy)
         $stmt = $db->prepare('DELETE FROM refresh_tokens WHERE user_id = ?');
         $stmt->bind_param('i', $user_id);
@@ -241,7 +273,7 @@ function createAuthTokens($db, $user_id, $username = null, $is_admin = false, $i
             'path' => '/',
             'httponly' => false, // Allow JS access for API calls
             'samesite' => 'Lax',
-            'secure' => isSecureConnection() // Auto-detect HTTPS
+            'secure' => isSecureConnection()
         ]);
         
         // Refresh token cookie - HttpOnly for security
@@ -329,8 +361,18 @@ function logoutUser($db) {
     // Track user ID before clearing session
     $user_id = $_SESSION['user_id'] ?? null;
     
-    // First, destroy the session completely
+    // Preserve anonymous_token before clearing session
+    $anonymousToken = $_SESSION['anonymous_token'] ?? $_COOKIE['anonymous_token'] ?? null;
+    
+    // Clear session except for anonymous_token and anonymous_id
+    $anonymousId = $_SESSION['anonymous_id'] ?? null;
     $_SESSION = array();
+    
+    // Restore anonymous_token and anonymous_id
+    if ($anonymousToken) {
+        $_SESSION['anonymous_token'] = $anonymousToken;
+        $_SESSION['anonymous_id'] = $anonymousId;
+    }
     
     // Delete session cookie
     if (ini_get("session.use_cookies")) {
@@ -344,7 +386,7 @@ function logoutUser($db) {
     // Destroy session data
     session_destroy();
     
-    // Clear specific auth cookies with multiple approaches for compatibility
+    // Clear specific auth cookies (but not anonymous_token)
     $cookie_paths = ['/', '/gamerating', ''];
     
     foreach ($cookie_paths as $path) {
@@ -384,6 +426,12 @@ function logoutUser($db) {
     // Start a fresh session to avoid errors
     session_start();
     
+    // Restore anonymous_token and anonymous_id to the new session
+    if ($anonymousToken) {
+        $_SESSION['anonymous_token'] = $anonymousToken;
+        $_SESSION['anonymous_id'] = $anonymousId;
+    }
+    
     // Generate a new CSRF token for the new session
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -417,7 +465,7 @@ function ensureAnonymousUser($db) {
     if ($anonymousToken) {
         // Try to validate and update existing token
         $stmt = $db->prepare('
-            SELECT id, token 
+            SELECT id, token, is_banned 
             FROM anonymous_users 
             WHERE token = ? AND expires_at > NOW()
         ');
@@ -426,8 +474,15 @@ function ensureAnonymousUser($db) {
         $result = $stmt->get_result();
         
         if ($result->num_rows > 0) {
-            // Token exists and is valid, update last seen
             $anonymousData = $result->fetch_assoc();
+            
+            // If the token is banned, create a new one
+            if ($anonymousData['is_banned']) {
+                // Using a private function to avoid code duplication
+                return createNewAnonymousToken($db);
+            }
+            
+            // Token exists and is valid, update last seen
             $db->query("
                 UPDATE anonymous_users 
                 SET last_seen = NOW() 
@@ -448,6 +503,47 @@ function ensureAnonymousUser($db) {
     
     // Generate new anonymous token
     $anonymousToken = bin2hex(random_bytes(32));
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+    $expiryDate = date('Y-m-d H:i:s', time() + ANONYMOUS_TOKEN_LIFETIME);
+    
+    // Insert into database
+    $stmt = $db->prepare('
+        INSERT INTO anonymous_users (token, fingerprint, ip_address, expires_at) 
+        VALUES (?, ?, ?, ?)
+    ');
+    $stmt->bind_param('ssss', $anonymousToken, $fingerprint, $ipAddress, $expiryDate);
+    $stmt->execute();
+    
+    // Get the ID of the new anonymous user
+    $anonymousId = $db->insert_id;
+    
+    // Set cookie
+    setcookie('anonymous_token', $anonymousToken, [
+        'expires' => time() + ANONYMOUS_TOKEN_LIFETIME,
+        'path' => '/',
+        'httponly' => false,  // Allow JS access for consistent UX
+        'samesite' => 'Lax',
+        'secure' => isSecureConnection()
+    ]);
+    
+    // Store in session for current request
+    $_SESSION['anonymous_token'] = $anonymousToken;
+    $_SESSION['anonymous_id'] = $anonymousId;
+    
+    return [
+        'anonymous_id' => $anonymousId,
+        'anonymous_token' => $anonymousToken,
+        'is_new' => true
+    ];
+}
+
+/**
+ * Helper function to create a new anonymous token
+ */
+function createNewAnonymousToken($db) {
+    // Generate new anonymous token
+    $anonymousToken = bin2hex(random_bytes(32));
+    $fingerprint = createDeviceFingerprint();
     $ipAddress = $_SERVER['REMOTE_ADDR'] ?? '';
     $expiryDate = date('Y-m-d H:i:s', time() + ANONYMOUS_TOKEN_LIFETIME);
     
@@ -566,11 +662,25 @@ function getUserDataMetaTag() {
  * 
  * @return array User identifier type and value
  */
-function getCurrentUserIdentifier() {
+function getCurrentUserIdentifier($db) {
     if (isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
+        $anonymousToken = null;
+        
+        // Check if this user_id has an associated anonymous_token
+        $stmt = $db->prepare('SELECT anonymous_token FROM user_anonymous_mapping WHERE user_id = ?');
+        $stmt->bind_param('i', $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            $anonymousToken = $result->fetch_assoc()['anonymous_token'];
+        }
+        
         return [
             'type' => 'user_id',
-            'value' => $_SESSION['user_id']
+            'value' => $user_id,
+            'anonymous_token' => $anonymousToken
         ];
     }
     
@@ -578,15 +688,44 @@ function getCurrentUserIdentifier() {
     $anonymousToken = $_SESSION['anonymous_token'] ?? $_COOKIE['anonymous_token'] ?? null;
     
     if ($anonymousToken) {
+        // Check if this anonymous user is banned
+        if (isAnonymousBanned($db, $anonymousToken)) {
+            return [
+                'type' => 'banned_anonymous',
+                'value' => null,
+                'anonymous_token' => $anonymousToken,
+                'is_banned' => true
+            ];
+        }
+
+        // Check if this anonymous token is linked to a user account
+        $stmt = $db->prepare('SELECT user_id FROM user_anonymous_mapping WHERE anonymous_token = ? LIMIT 1');
+        $stmt->bind_param('s', $anonymousToken);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            // Found a linked user account - treat as that user
+            $userId = (int)$result->fetch_assoc()['user_id'];
+            return [
+                'type' => 'user_id',  // Important: treat as the linked user!
+                'value' => $userId,
+                'anonymous_token' => $anonymousToken
+            ];
+        }
+        
+        // No linked user, proceed as anonymous
         return [
             'type' => 'anonymous_token',
-            'value' => $anonymousToken
+            'value' => $anonymousToken,
+            'anonymous_token' => $anonymousToken
         ];
     }
     
     return [
         'type' => 'anonymous_token',
-        'value' => null
+        'value' => null,
+        'anonymous_token' => null
     ];
 }
 
@@ -613,6 +752,28 @@ function createDeviceFingerprint() {
         $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''
     ];
     return hash('sha256', implode('|', $data));
+}
+
+/**
+ * Check if an anonymous token is banned
+ * 
+ * @param object $db Database connection
+ * @param string $anonymousToken The anonymous token to check
+ * @return bool True if banned, false otherwise
+ */
+function isAnonymousBanned($db, $anonymousToken) {
+    if (empty($anonymousToken)) return false;
+    
+    $stmt = $db->prepare('SELECT is_banned FROM anonymous_users WHERE token = ?');
+    if (!$stmt) return false;
+    
+    $stmt->bind_param('s', $anonymousToken);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) return false;
+    
+    return (bool)$result->fetch_assoc()['is_banned'];
 }
 
 ?>

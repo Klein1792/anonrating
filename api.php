@@ -55,6 +55,7 @@ try {
         'getGameVotes',
         'getGameDetails',
         'getReviewsByGame',
+        'getGameDynamicData',
         'checkUserVote',
         'checkReviewVote',
         'login',
@@ -84,7 +85,10 @@ try {
         'removeAdmin',
         'deleteGame',
         'updateGame',
-        'addGame'
+        'addGame',
+        'getAnonymousUsers',
+        'banAnonymousUser',
+        'unbanAnonymousUser'
     ];
     
     // Check if the current action requires authentication
