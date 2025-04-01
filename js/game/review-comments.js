@@ -139,6 +139,20 @@
                 
                 loadComments(reviewId);
                 
+                // Ensure comments are expanded after posting
+                setTimeout(() => {
+                    const commentsContent = document.getElementById(`comments-content-${reviewId}`);
+                    const toggleButton = document.querySelector(`#comments-${reviewId} .comments-toggle`);
+                    
+                    if (commentsContent && commentsContent.classList.contains('collapsed')) {
+                        commentsContent.classList.remove('collapsed');
+                        if (toggleButton) {
+                            toggleButton.textContent = 'Hide Replies';
+                            toggleButton.setAttribute('aria-expanded', 'true');
+                        }
+                    }
+                }, 100);
+                
                 UIUtils.showNotification('Reply posted successfully', 'success');
             } else {
                 UIUtils.showNotification(data.error || 'Failed to post reply', 'error');
@@ -160,7 +174,7 @@
     }
     
     /**
-     * Load comments for a review
+     * Load comments for a review with simple show/hide toggle
      * @param {number} reviewId - ID of the review
      */
     function loadComments(reviewId) {
@@ -178,13 +192,38 @@
                 commentsContainer.innerHTML = formHTML;
                 
                 if (data.success && data.comments && data.comments.length > 0) {
-                    const commentsHeader = document.createElement('h5');
-                    commentsHeader.className = 'comments-header';
-                    commentsHeader.textContent = `Replies (${data.comments.length})`;
-                    commentsContainer.appendChild(commentsHeader);
+                    // Create toggle button matching the description toggle style
+                    const toggleButton = document.createElement('button');
+                    toggleButton.className = 'description-toggle show-more';
+                    toggleButton.textContent = `Show Replies (${data.comments.length})`;
+                    commentsContainer.appendChild(toggleButton);
                     
+                    // Create the content container (initially hidden)
+                    const commentsContent = document.createElement('div');
+                    commentsContent.className = 'description-content';
+                    commentsContent.style.display = 'none'; // Start hidden
+                    commentsContent.id = `comments-content-${reviewId}`;
+                    
+                    // Add comments to the content
                     data.comments.forEach(comment => {
-                        renderComment(comment, commentsContainer);
+                        renderComment(comment, commentsContent);
+                    });
+                    
+                    commentsContainer.appendChild(commentsContent);
+                    
+                    // Add click behavior
+                    toggleButton.addEventListener('click', function() {
+                        if (commentsContent.style.display === 'none') {
+                            commentsContent.style.display = 'block';
+                            this.textContent = `Hide Replies (${data.comments.length})`;
+                            this.classList.remove('show-more');
+                            this.classList.add('show-less');
+                        } else {
+                            commentsContent.style.display = 'none';
+                            this.textContent = `Show Replies (${data.comments.length})`;
+                            this.classList.remove('show-less');
+                            this.classList.add('show-more');
+                        }
                     });
                 } else if (data.success) {
                     if (!existingForm) {
@@ -203,6 +242,29 @@
             .catch(error => {
                 commentsContainer.innerHTML = `<p class="error-message">Error: ${error.message}</p>` + formHTML;
             });
+    }
+    
+    /**
+     * Toggle comments visibility (simplified version)
+     * @param {number} reviewId - ID of the review
+     */
+    function toggleComments(reviewId) {
+        const commentsContent = document.getElementById(`comments-content-${reviewId}`);
+        const toggleButton = document.querySelector(`#comments-${reviewId} .description-toggle`);
+        
+        if (!commentsContent || !toggleButton) return;
+        
+        if (commentsContent.style.display === 'none') {
+            commentsContent.style.display = 'block';
+            toggleButton.classList.remove('show-more');
+            toggleButton.classList.add('show-less');
+            toggleButton.textContent = toggleButton.textContent.replace('Show', 'Hide');
+        } else {
+            commentsContent.style.display = 'none';
+            toggleButton.classList.remove('show-less');
+            toggleButton.classList.add('show-more');
+            toggleButton.textContent = toggleButton.textContent.replace('Hide', 'Show');
+        }
     }
     
     /**
@@ -478,8 +540,8 @@
         loadComments,
         submitComment,
         deleteComment,
-        loadComments,
-        initializeComments
+        initializeComments,
+        toggleComments
     };
     
     // Auto-initialize when DOM is ready
