@@ -69,7 +69,7 @@
     
     /* Make buttons more tappable */
     button, .btn { 
-        min-height: 44px; 
+        min-height: 8px; 
         padding: 12px 20px; 
         margin: 10px 0; 
         touch-action: manipulation; 
@@ -96,19 +96,18 @@
         margin-bottom: 10px;
     }
 
-    /* Shrink Helpful and Not Helpful buttons on mobile */
-    .review-actions .helpful-btn,
-    .review-actions .unhelpful-btn,.review-actions .report-review-btn {
-        font-size: 7px; /* Smaller font size on mobile */
-        padding: 0 2px; /* Minimal padding */
-        min-height: 5px !important; /* Reduced height */
-        margin: 1px 0; /* Add slight vertical margin to prevent overlap */
-    }
-
+   
+ /* Shrink Helpful and Not Helpful buttons on mobile */
+ .comment-actions .report-comment-btn, .comment-actions .delete-comment-btn, .review-actions .helpful-btn, .review-actions .reply-review-btn, .review-actions .ban-user-btn, .review-actions .unhelpful-btn, .review-actions .report-review-btn  {
+    font-size: 9px; /* Smaller font size on mobile */
+    padding: 0 2px; /* Minimal padding */
+    min-height: 5px !important; /* Reduced height */
+    margin: 1px 0; /* Add slight vertical margin to prevent overlap */
+}
     /* Adjust Edit and Delete buttons to match */
     .review-actions .edit-review-btn,
     .review-actions .delete-review-btn {
-        font-size: 8px; /* Match font size */
+        font-size: 11px; /* Match font size */
     }
 
     /* Adjust the review-actions container for better spacing */
@@ -135,7 +134,6 @@
     /* Further shrink Helpful and Not Helpful buttons on very small screens */
     .review-actions .helpful-btn,
     .review-actions .unhelpful-btn {
-        font-size: 7px; /* Even smaller font size */
         padding: 0 1px; /* Minimal padding */
         min-height: 14px; /* Further reduced height */
         margin: 1px 0; /* Keep slight vertical margin */
@@ -143,7 +141,7 @@
 
     .review-actions .edit-review-btn,
     .review-actions .delete-review-btn {
-        font-size: 7px; /* Match font size */
+        font-size: 11px; /* Match font size */
     }
 
     .review-actions {

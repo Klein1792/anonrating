@@ -84,6 +84,87 @@
     }
     
     /**
+     * Ban or unban a user from a comment
+     * @param {Object} comment - The comment object containing user data
+     */
+    function banUserFromComment(comment) {
+        // Verify current user has moderation privileges
+        const currentUser = window.currentUser;
+        
+        if (!currentUser) {
+            console.error("No current user for moderation action");
+            UIUtils.showNotification('Authentication required for moderation actions', 'error');
+            return;
+        }
+        
+        if (!currentUser.is_admin && !currentUser.is_moderator) {
+            console.error("User lacks moderation privileges:", currentUser);
+            UIUtils.showNotification('You must be an admin or moderator to ban users', 'error');
+            return;
+        }
+
+        const isBanned = comment.is_banned || false;
+        const confirmMessage = isBanned ? 
+            "Are you sure you want to unban this user?" : 
+            "Are you sure you want to ban this user? They will not be able to submit comments, reviews or vote.";
+        
+        // Use the styled confirmation dialog instead of basic confirm()
+        showConfirmDialog(confirmMessage, isBanned ? 'Yes, Unban' : 'Yes, Ban')
+            .then(confirmed => {
+                if (!confirmed) return;
+                
+                let endpoint;
+                
+                if (comment.is_anonymous && comment.anonymous_token) {
+                    // For anonymous users
+                    endpoint = `${window.baseUrl}/api.php?action=${isBanned ? 'unbanAnonymousUser' : 'banAnonymousUser'}&token=${comment.anonymous_token}`;
+                } else if (comment.user_id) {
+                    // For registered users
+                    endpoint = `${window.baseUrl}/api.php?action=${isBanned ? 'unbanUser' : 'banUser'}&id=${comment.user_id}`;
+                } else {
+                    UIUtils.showNotification('Error: Could not determine user type', 'error');
+                    return;
+                }
+                
+                // Rest of the existing code...
+                console.log("Ban endpoint:", endpoint);
+                console.log("Comment data:", comment);
+                
+                const fetchFn = window.gameRating?.auth?.fetchWithAuth || AuthUtils.fetchWithAuth;
+                
+                fetchFn(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return handleApiError(response);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        UIUtils.showNotification(`User ${isBanned ? 'unbanned' : 'banned'} successfully`, 'success');
+                        
+                        // Reload the comments to reflect changes
+                        if (comment.review_id) {
+                            window.ReviewComments.loadComments(comment.review_id);
+                        }
+                    } else {
+                        UIUtils.showNotification(`Error: ${data.error || 'Unknown error'}`, 'error');
+                    }
+                })
+                .catch(error => {
+                    UIUtils.showNotification(`Error: ${error.message}`, 'error');
+                    console.error("Ban operation error:", error);
+                });
+            });
+    }
+    
+    /**
      * Handle API errors with better debugging
      * @param {Response} response - Fetch API response object
      * @returns {Promise} - Promise that resolves to error data
@@ -374,10 +455,63 @@
         });
     }
     
+    /**
+     * Show a styled confirmation dialog
+     * @param {string} message - The confirmation message to display
+     * @param {string} confirmText - Text for the confirm button
+     * @returns {Promise<boolean>} - Resolves to true if confirmed, false otherwise
+     */
+    function showConfirmDialog(message, confirmText = 'Yes') {
+        return new Promise((resolve) => {
+            let dialog = document.getElementById('confirm-dialog');
+            if (!dialog) {
+                dialog = document.createElement('div');
+                dialog.id = 'confirm-dialog';
+                dialog.className = 'confirm-dialog';
+                document.body.appendChild(dialog);
+            }
+            
+            dialog.innerHTML = `
+                <div class="confirm-dialog-content">
+                    <p>${message}</p>
+                    <div class="confirm-dialog-buttons">
+                        <button id="confirm-yes" class="btn-warning">${confirmText}</button>
+                        <button id="confirm-no">Cancel</button>
+                    </div>
+                </div>
+            `;
+            
+            dialog.style.display = 'flex';
+            
+            const yesBtn = document.getElementById('confirm-yes');
+            const noBtn = document.getElementById('confirm-no');
+            
+            yesBtn.addEventListener('click', () => {
+                dialog.style.display = 'none';
+                resolve(true);
+            });
+            
+            noBtn.addEventListener('click', () => {
+                dialog.style.display = 'none';
+                resolve(false);
+            });
+            
+            // Close when clicking outside the dialog content
+            dialog.addEventListener('click', function(event) {
+                if (event.target === dialog) {
+                    dialog.style.display = 'none';
+                    resolve(false);
+                }
+            });
+        });
+    }
+    
     // Export functions to global scope
     window.ModerationActions = {
         banUserFromReview,
+        banUserFromComment,
         showReportedReviews,
-        handleApiError
+        handleApiError,
+        showConfirmDialog
     };
 })();

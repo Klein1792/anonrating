@@ -86,6 +86,9 @@ if (!$user['is_admin']) {
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="reported-reviews-tab" data-bs-toggle="tab" data-bs-target="#reported-reviews" type="button" role="tab" aria-controls="reported-reviews" aria-selected="false">Reported Reviews</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="reported-comments-tab" data-bs-toggle="tab" data-bs-target="#reported-comments" type="button" role="tab" aria-controls="reported-comments" aria-selected="false">Reported Comments</button>
+            </li>
         </ul>
 
         <!-- Tabs Content -->
@@ -190,6 +193,37 @@ if (!$user['is_admin']) {
                     <button id="reports-next-page" disabled>Next</button>
                 </div>
             </div>
+
+            <!-- Reported Comments Tab Content -->
+<div class="tab-pane fade" id="reported-comments" role="tabpanel" aria-labelledby="reported-comments-tab">
+    <div class="admin-section">
+        <h3>Reported Comments</h3>
+        <div class="table-container">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Comment</th>
+                        <th>Review</th>
+                        <th>Game</th>
+                        <th>Reporter</th>
+                        <th>Reason</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="comments-reports-table">
+                    <!-- Comment reports will be populated here -->
+                </tbody>
+            </table>
+            <div class="pagination">
+                <button id="comments-reports-prev-page" disabled>Previous</button>
+                <span id="comments-reports-page-info">Page 1 of 1</span>
+                <button id="comments-reports-next-page" disabled>Next</button>
+            </div>
+        </div>
+    </div>
+</div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -218,6 +252,8 @@ if (!$user['is_admin']) {
                     loadAnonymousUsers();
                 } else if (targetTab === 'reported-reviews-tab') {
                     loadReportedReviews();
+                } else if (targetTab === 'reported-comments-tab') {
+                    loadReportedComments();
                 }
             });
         });
@@ -698,6 +734,219 @@ if (!$user['is_admin']) {
             });
     }
 
+    // Variables for comment reports pagination
+    let commentReportsCurrentPage = 1;
+    const commentReportsPerPage = 10;
+
+    // Function to load reported comments
+    function loadReportedComments(page = 1) {
+        commentReportsCurrentPage = page;
+        fetch(`${baseUrl}/api.php?action=getReportedComments&page=${page}&limit=${commentReportsPerPage}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = 'login.php';
+                        throw new Error('Unauthorized: Please log in');
+                    }
+                    throw new Error('Failed to fetch comment reports: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const reportsTable = document.getElementById('comments-reports-table');
+                reportsTable.innerHTML = '';
+                
+                if (!data.reports || data.reports.length === 0) {
+                    reportsTable.innerHTML = `<tr><td colspan="8">No reported comments found</td></tr>`;
+                    return;
+                }
+                
+                data.reports.forEach(report => {
+                    const row = document.createElement('tr');
+                    const commentContent = report.comment_content.length > 50 ? 
+                        report.comment_content.substring(0, 50) + '...' : 
+                        report.comment_content;
+                    row.innerHTML = `
+                        <td>${commentContent}</td>
+                        <td>${report.review_title}</td>
+                        <td>${report.game_name}</td>
+                        <td>${report.reporter_name || 'Anonymous'}</td>
+                        <td>${report.reason}</td>
+                        <td>${report.created_at}</td>
+                        <td><span class="status-${report.status.toLowerCase()}">${report.status.charAt(0).toUpperCase() + report.status.slice(1)}</span></td>
+                        <td>
+                            <button onclick="viewCommentReportDetails(${report.id})">View Details</button>
+                            <button onclick="viewCommentReport(${report.id}, ${report.comment_id}, ${report.review_id}, ${report.game_id})">View on Page</button>
+                            <button onclick="dismissCommentReport(${report.id})">Dismiss</button>
+                            <button onclick="actionCommentReport(${report.id}, ${report.comment_id})">Remove Comment</button>
+                        </td>
+                    `;
+                    reportsTable.appendChild(row);
+                });
+
+                document.getElementById('comments-reports-page-info').textContent = `Page ${data.current_page} of ${data.total_pages || 1}`;
+                document.getElementById('comments-reports-prev-page').disabled = data.current_page <= 1;
+                document.getElementById('comments-reports-next-page').disabled = data.current_page >= (data.total_pages || 1);
+            })
+            .catch(error => {
+                console.error('Error fetching comment reports:', error);
+                document.getElementById('comments-reports-table').innerHTML = 
+                    `<tr><td colspan="8">Error: ${error.message}</td></tr>`;
+                document.getElementById('comments-reports-page-info').textContent = 'Page 1 of 1';
+                document.getElementById('comments-reports-prev-page').disabled = true;
+                document.getElementById('comments-reports-next-page').disabled = true;
+            });
+    }
+
+    // Function to view comment report details
+    function viewCommentReportDetails(reportId) {
+        fetch(`${baseUrl}/api.php?action=getCommentReportDetails&id=${reportId}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to fetch report details');
+                return response.json();
+            })
+            .then(data => {
+                if (!data.report) {
+                    showNotification('Error: Report not found', 'error');
+                    return;
+                }
+                
+                const report = data.report;
+                const modal = document.createElement('div');
+                modal.className = 'report-details-modal';
+                
+                modal.innerHTML = `
+                    <div class="report-details-modal-content">
+                        <h2>Comment Report Details</h2>
+                        <div>
+                            <h3>Report Information</h3>
+                            <p><strong>Status:</strong> <span class="status-${report.status.toLowerCase()}">${getStatusLabel(report.status)}</span></p>
+                            <p><strong>Reporter:</strong> ${report.reporter_name || 'Anonymous'}</p>
+                            <p><strong>Reason:</strong> ${report.reason}</p>
+                            <p><strong>Date Reported:</strong> ${report.created_at}</p>
+                        </div>
+                        <div>
+                            <h3>Comment Content</h3>
+                            <div class="content-box">
+                                ${report.comment_content}
+                            </div>
+                        </div>
+                        <div>
+                            <h3>Reporter's Additional Details</h3>
+                            <div class="content-box">
+                                ${report.details || '<em>No additional details provided</em>'}
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <div class="action-buttons">
+                                <button onclick="dismissCommentReport(${report.id}); document.querySelector('.report-details-modal').remove();">
+                                    Dismiss Report
+                                </button>
+                                <button class="remove" onclick="actionCommentReport(${report.id}, ${report.comment_id}); document.querySelector('.report-details-modal').remove();">
+                                    Remove Comment
+                                </button>
+                            </div>
+                            <button class="close-button" onclick="document.querySelector('.report-details-modal').remove();">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+            })
+            .catch(error => {
+                showNotification('Error: ' + error.message, 'error');
+            });
+    }
+
+    // View comment report on the page
+    function viewCommentReport(reportId, commentId, reviewId, gameId) {
+        fetch(`${baseUrl}/api.php?action=updateCommentReportStatus&id=${reportId}&status=reviewing`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-CSRF-Token': getCsrfToken() || ""
+            }
+        }).then(response => response.json());
+        
+        window.open(`${baseUrl}/game.php?id=${gameId}#review-${reviewId}`, '_blank');
+    }
+
+    // Dismiss a comment report
+    function dismissCommentReport(reportId) {
+        if (!confirm('Are you sure you want to dismiss this report?')) return;
+        
+        fetch(`${baseUrl}/api.php?action=updateCommentReportStatus&id=${reportId}&status=rejected`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-CSRF-Token': getCsrfToken() || ""
+            }
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to update report status');
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showNotification('Report dismissed successfully');
+                    loadReportedComments(commentReportsCurrentPage);
+                } else {
+                    showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => showNotification('Error: ' + error.message, 'error'));
+    }
+
+    // Remove a reported comment
+    function actionCommentReport(reportId, commentId) {
+        if (!confirm('Are you sure you want to remove this comment? This action cannot be undone.')) return;
+        
+        fetch(`${baseUrl}/api.php?action=adminDeleteComment&id=${commentId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-CSRF-Token': getCsrfToken() || ""
+            }
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to delete comment');
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    return fetch(`${baseUrl}/api.php?action=updateCommentReportStatus&id=${reportId}&status=actioned`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'X-CSRF-Token': getCsrfToken() || ""
+                        }
+                    });
+                } else {
+                    throw new Error(data.error || 'Failed to delete comment');
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Comment removed and report marked as actioned');
+                    loadReportedComments(commentReportsCurrentPage);
+                } else {
+                    showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => showNotification('Error: ' + error.message, 'error'));
+    }
+
     function getCsrfToken() {
         const metaTag = document.querySelector('meta[name="csrf-token"]');
         return metaTag ? metaTag.content : "";
@@ -712,6 +961,17 @@ if (!$user['is_admin']) {
             notification.remove();
         }, 3000);
     }
+
+    // Event listeners for comment reports pagination
+    document.getElementById('comments-reports-prev-page').addEventListener('click', () => {
+        if (commentReportsCurrentPage > 1) {
+            loadReportedComments(commentReportsCurrentPage - 1);
+        }
+    });
+
+    document.getElementById('comments-reports-next-page').addEventListener('click', () => {
+        loadReportedComments(commentReportsCurrentPage + 1);
+    });
     </script>
 </body>
 </html>

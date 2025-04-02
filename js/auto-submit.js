@@ -53,27 +53,47 @@
                         body: formData,
                         credentials: 'same-origin'
                     }).then(response => {
+                        console.log('Server response:', { status: response.status, redirected: response.redirected, url: response.url });
                         if (response.redirected) {
-                            // Follow the redirect to index.php
-                            window.location.href = response.url;
+                            window.location.href = window.baseUrl + '/index.php';
+                            return { success: true };
                         } else {
-                            return response.json().then(data => {
-                                if (data.success) {
-                                    // Redirect to index.php if the response indicates success
-                                    window.location.href = '/index.php';
-                                } else {
-                                    // Show error message if login fails
-                                    const statusEl = document.getElementById('challenge-status');
-                                    if (statusEl) {
-                                        statusEl.textContent = data.error || 'Login failed. Please try again.';
-                                        statusEl.style.color = 'red';
+                            // Check the content type before trying to parse as JSON
+                            const contentType = response.headers.get('content-type');
+                            if (contentType && contentType.includes('application/json')) {
+                                // It's JSON, parse it normally
+                                return response.json();
+                            } else {
+                                // Handle HTML or other non-JSON responses
+                                return response.text().then(text => {
+                                    console.log("Server returned non-JSON response");
+                                    
+                                    if (response.ok) {
+                                        // If status is 200-299, treat as success and redirect
+                                        window.location.href = '/index.php'; 
+                                        return { success: true };
+                                    } else {
+                                        // Show the first part of the response for debugging
+                                        console.warn("Non-JSON error response:", text.substring(0, 100));
+                                        throw new Error('Server returned non-JSON response');
                                     }
-                                    // Reset flags to allow retry
-                                    window.gameRating.auth.isAutoSubmitting = false;
-                                    form.disabled = false;
-                                    autoSubmitScheduled = false;
-                                }
-                            });
+                                });
+                            }
+                        }
+                    }).then(data => {
+                        if (data.success) {
+                            window.location.href = window.baseUrl + '/index.php';
+                        } else {
+                            // Show error message if login fails
+                            const statusEl = document.getElementById('challenge-status');
+                            if (statusEl) {
+                                statusEl.textContent = data.error || 'Login failed. Please try again.';
+                                statusEl.style.color = 'red';
+                            }
+                            // Reset flags to allow retry
+                            window.gameRating.auth.isAutoSubmitting = false;
+                            form.disabled = false;
+                            autoSubmitScheduled = false;
                         }
                     }).catch(error => {
                         console.error('Error submitting form:', error);

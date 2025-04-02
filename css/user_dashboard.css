@@ -1,0 +1,221 @@
+/* User Dashboard Styles - Smaller and more compact */
+.dashboard-wrapper {
+    padding: 10px 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    margin-bottom: 15px;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+
+.dashboard-title {
+    text-align: center;
+    margin: 0;
+    color: #00aaff;
+    text-shadow: 0 0 5px rgba(0, 170, 255, 0.7);
+    font-size: 1.8rem;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+#dashboardTabs {
+    border-bottom-color: #00aaff;
+    margin-bottom: 10px;
+    justify-content: center;
+}
+
+.tab-content {
+    padding: 10px;
+}
+
+/* Profile section - smaller */
+.profile-section {
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    padding: 15px;
+}
+
+.profile-details p {
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+/* Reviews section - smaller */
+.user-review-item {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    padding: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid #00aaff;
+}
+
+.user-review-item .review-header h3 {
+    font-size: 1rem;
+}
+
+.user-review-item .review-rating {
+    color: #ffaa00;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.user-review-item h4 {
+    color: #00aaff;
+    margin-bottom: 5px;
+    font-size: 0.95rem;
+}
+
+.user-review-item .review-content {
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+}
+
+/* Comments section - smaller */
+.user-comment-item {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    padding: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid #00ffaa;
+}
+
+.user-comment-item .comment-header h3 {
+    font-size: 1rem;
+}
+
+.user-comment-item .comment-content {
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+}
+
+/* Convert liked games to a LIST instead of grid */
+#liked-games-container {
+    display: flex;
+    flex-direction: column; /* Stack items vertically */
+    align-items: stretch; /* Make items full width */
+    max-width: 600px; /* Keep container narrower */
+    margin: 0 auto; /* Center the list */
+}
+
+/* Make each game card a list item */
+#liked-games-container .game-card {
+    width: 100%;
+    max-width: none;
+    margin: 4px 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    padding: 5px;
+}
+
+#liked-games-container .game-card-inner {
+    display: flex;
+    align-items: center;
+}
+
+#liked-games-container .game-cover {
+    width: 48px; /* Even smaller */
+    height: 48px;
+    min-width: 48px;
+    flex-shrink: 0;
+    margin-right: 8px;
+    overflow: hidden;
+}
+
+#liked-games-container .game-title {
+    font-size: 0.85rem;
+    margin-bottom: 3px;
+}
+
+#liked-games-container .game-meta {
+    font-size: 0.75rem;
+    color: #888;
+}
+
+/* Smaller font for all content */
+.user-reviews-container,
+.user-comments-container,
+#liked-games-container {
+    font-size: 0.9rem;
+}
+
+/* Make buttons and labels smaller */
+.view-btn, 
+.edit-review-btn, 
+.delete-review-btn,
+.delete-comment-btn {
+    font-size: 0.75rem;
+    padding: 2px 5px;
+}
+
+/* Smaller loading and status indicators */
+.loading, .no-data, .error {
+    font-size: 0.9rem;
+    padding: 10px;
+}
+
+/* Improved header styling for the dashboard */
+.dashboard-header {
+    text-align: center;
+    margin: 0 auto 20px auto;
+    max-width: 500px;
+    background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,170,255,0.2), rgba(0,0,0,0));
+    padding: 15px 0;
+    border-radius: 50px;
+    position: relative;
+}
+
+/* Add a subtle animated glow effect */
+.dashboard-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 50px;
+    box-shadow: 0 0 15px rgba(0, 170, 255, 0.4);
+    opacity: 0.6;
+    z-index: -1;
+    animation: glow 3s infinite alternate;
+}
+
+@keyframes glow {
+    from {
+        box-shadow: 0 0 10px rgba(0, 170, 255, 0.4);
+    }
+    to {
+        box-shadow: 0 0 20px rgba(0, 170, 255, 0.7);
+    }
+}
+
+/* Center the site header on dashboard page */
+body.user-dashboard-page .header-container .header-main {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    float: none;
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+}
+
+body.user-dashboard-page .site-branding {
+    text-align: center;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+body.user-dashboard-page .user-status {
+    text-align: center;
+    width: 100%;
+    float: none;
+}
+
+h2, h3 {
+    text-shadow:none;
+}

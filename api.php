@@ -36,6 +36,7 @@ try {
     require_once 'api/reviews.php';
     require_once 'api/stats.php';
     require_once 'api/batch.php';
+    
     // Start session if not already started
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
@@ -49,6 +50,7 @@ try {
         'getPageviews', 
         'getStatistics', 
         'logout',
+        'batch',
         'incrementPageview',
         'games',
         'search',
@@ -62,7 +64,6 @@ try {
         'register',
         'refreshToken',
         'getReviewComments'
-        
     ];
     
     // Define semi-restricted actions that need either authenticated or anonymous users
@@ -73,7 +74,9 @@ try {
         'editReview',
         'deleteReview',
         'reportReview',
-        'addReviewComment'
+        'addReviewComment',
+        'deleteReviewComment', // Added: Requires user to be comment owner or admin/moderator
+        'reportComment'        // Added: Allows authenticated or anonymous users
     ];
     
     // Define admin-only actions
@@ -94,9 +97,13 @@ try {
         'banAnonymousUser',
         'unbanAnonymousUser',
         'getReportedReviews',
-        'getReportDetails',     // Add this
-        'updateReportStatus',    // Add this 
-        'adminDeleteReview'      // Add this
+        'getReportDetails',
+        'updateReportStatus',
+        'adminDeleteReview',
+        'getReportedComments',      // Added: Admin/moderator only
+        'getCommentReportDetails',  // Added: Admin/moderator only
+        'updateCommentReportStatus',// Added: Admin/moderator only
+        'adminDeleteComment'        // Added: Admin/moderator only
     ];
     
     // Check if the current action requires authentication
@@ -224,7 +231,20 @@ try {
                 echo json_encode(['success' => true, 'message' => 'Pageview incremented']);
                 $handled = true;
                 break;
+            case 'getUserReviews':
+                require_once 'api/user_dashboard_api.php';
+                handleUserDashboardAction($action, $db);
+                break;
                 
+            case 'getUserComments':
+                require_once 'api/user_dashboard_api.php';
+                handleUserDashboardAction($action, $db);
+                break;
+                
+            case 'getUserLikedGames':
+                require_once 'api/user_dashboard_api.php';
+                handleUserDashboardAction($action, $db);
+                break;               
             case 'getPageviews':
                 // Get pageview count
                 $result = $db->query("SELECT total FROM pageviews WHERE id = 1");
@@ -239,7 +259,6 @@ try {
                 $handled = true;
                 break;
             
-            // Add the updateAllGameRatings case here
             case 'updateAllGameRatings':
                 // Update average ratings for all games
                 $result = $db->query('SELECT DISTINCT game_id FROM reviews');
@@ -281,6 +300,12 @@ try {
                 $handled = true;
                 break;
                 
+            case 'getBatchUserData':
+                require_once 'api/user_dashboard_api.php';
+                handleUserDashboardAction($action, $db);
+                $handled = true;
+                break;
+
             default:
                 // Unknown action
                 if (!empty($action)) {
@@ -303,7 +328,6 @@ try {
         'error' => 'Server error',
         'message' => 'An unexpected error occurred. Please try again later.',
         'debug' => $e->getMessage()
-        // In development mode, you might want to include: 'debug' => $e->getMessage()
     ]);
 }
 

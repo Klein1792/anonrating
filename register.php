@@ -1,27 +1,29 @@
 <?php
+session_start();
 include 'db_connect.php';
 include 'api/rate_limiter.php';
 
-// Generate CSRF token if not already set
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf_token = $_POST['csrf_token'] ?? '';
+    $username = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
+
+    error_log("Received POST data: username='$username', password='$password', csrf_token='$csrf_token'");
+
     if (!$csrf_token || !isset($_SESSION['csrf_token']) || $csrf_token !== $_SESSION['csrf_token']) {
         $error = "Invalid CSRF token";
+        error_log("Registration failed: Invalid CSRF token");
     } else {
-        $username = trim($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
-
-        // Validate username: alphanumeric, 3-20 characters
         if (!preg_match('/^[a-zA-Z0-9]{3,20}$/', $username)) {
             $error = "Username must be 3-20 characters long and contain only letters and numbers.";
-        }
-        // Validate password: at least 8 characters, 1 uppercase, 1 lowercase, 1 number
-        elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/', $password)) {
+            error_log("Registration failed: Invalid username format - $username");
+        } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/', $password)) {
             $error = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.";
+            error_log("Registration failed: Invalid password format - '$password'");
         } else {
             $stmt = $db->prepare('SELECT id FROM users WHERE username = ?');
             $stmt->bind_param('s', $username);
@@ -30,28 +32,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($result->num_rows > 0) {
                 $error = "Username already exists.";
+                error_log("Registration failed: Username already exists - $username");
             } else {
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $db->prepare('INSERT INTO users (username, password) VALUES (?, ?)');
                 $stmt->bind_param('ss', $username, $hashed_password);
                 if ($stmt->execute()) {
-                    // Get the new user's ID
                     $user_id = $stmt->insert_id;
+                    error_log("User inserted successfully: $username, ID: $user_id");
                     $_SESSION['user_id'] = $user_id;
                     $_SESSION['username'] = $username;
-                    $_SESSION['is_admin'] = 0;  // New user is not an admin
-                    $_SESSION['is_moderator'] = 0;  // New user is not a moderator
+                    $_SESSION['is_admin'] = 0;
+                    $_SESSION['is_moderator'] = 0;
 
-                    // Generate access token with longer lifetime (7 days)
                     $token = bin2hex(random_bytes(32));
                     $expiresAt = date('Y-m-d H:i:s', strtotime('+7 days'));
-                    
-                    // Create new token
                     $tokenStmt = $db->prepare('INSERT INTO access_tokens (user_id, token, expires_at) VALUES (?, ?, ?)');
                     $tokenStmt->bind_param('iss', $user_id, $token, $expiresAt);
-                    $tokenStmt->execute();
+                    if ($tokenStmt->execute()) {
+                        error_log("Token inserted successfully for user: $username");
+                    } else {
+                        error_log("Token insertion failed: " . $tokenStmt->error);
+                    }
 
-                    // Store token in session and cookie
                     $_SESSION['access_token'] = $token;
                     setcookie('access_token', $token, [
                         'expires' => strtotime('+7 days'),
@@ -61,16 +64,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'secure' => false
                     ]);
 
-                    // Regenerate session ID to prevent session fixation
                     session_regenerate_id(true);
-                    
-                    header('Location: index.php');
+                    header('Location: /gamerating/index.php');
                     exit;
                 } else {
-                    $error = "Registration failed.";
+                    $error = "Registration failed: " . $stmt->error;
+                    error_log("Registration failed: " . $stmt->error);
                 }
+                $stmt->close();
             }
-            $stmt->close();
         }
     }
 }
@@ -112,14 +114,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <!-- Custom notification container -->
-    <div id="custom-notification" class="custom-notification" style="display: none;">
+    <div id="custom-notification" class="custom-notification" style="display: flex">
         <p id="notification-message"></p>
     </div>
     
 <script src="js/auth-pages.js"></script>
-<script src="js/auto-submit.js"></script>
-
-
+ <script src="js/auto-submit.js"></script>
 <?php include 'footer.php'; ?>
 </body>
 </html>

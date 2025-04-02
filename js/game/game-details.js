@@ -17,92 +17,54 @@
     function loadGameDetails(gameId, forceRefresh = false) {
         if (!gameId || isNaN(gameId) || parseInt(gameId) <= 0) {
             console.error('Invalid gameId:', gameId);
-            UIUtils.showNotification('Invalid game ID. Unable to load game details.', 'error');
+            UIUtils.showNotification('Invalid game ID. Unable to load game details.', 'error', 2000);
             return Promise.reject(new Error('Invalid game ID'));
         }
-
+    
         const cachedStaticData = !forceRefresh ? window.GameCache?.getGameStatic(gameId) : null;
-
+        let loadingNotification = null;
+    
         if (cachedStaticData && !forceRefresh) {
             renderGameStatic(cachedStaticData);
-
             return fetch(`${window.baseUrl}/api.php?action=getGameDynamicData&id=${gameId}&_=${Date.now()}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.dynamic) {
+                        updateGameDynamic(data.dynamic);
+                        return { ...cachedStaticData, ...data.dynamic };
                     }
-                    return response.text();
-                })
-                .then(text => {
-                    try {
-                        const data = JSON.parse(text);
-                        if (data.success && data.dynamic) {
-                            updateGameDynamic(data.dynamic);
-                            return data.dynamic;
-                        } else {
-                            throw new Error(data.error || 'Unknown error loading dynamic data');
-                        }
-                    } catch (e) {
-                        console.error('Error parsing dynamic game data:', e, text);
-                        throw new Error('Invalid response format');
-                    }
+                    throw new Error(data.error || 'Failed to load dynamic data');
                 })
                 .catch(error => {
                     console.error('Error loading dynamic data:', error);
-                    updateGameDynamic({
-                        likes: 0,
-                        dislikes: 0,
-                        approval_percent: 0,
-                        avg_rating: null,
-                        review_count: 0
-                    });
-                    UIUtils.showNotification('Failed to load dynamic game data. Showing default values.', 'error');
+                    updateGameDynamic({ likes: 0, dislikes: 0, approval_percent: 0, avg_rating: null, review_count: 0 });
                     throw error;
                 });
         } else {
-            UIUtils.showNotification('Loading game data...', 'info');
-
-            const timestamp = Date.now();
-            return fetch(`${window.baseUrl}/api.php?action=getGameDetails&id=${gameId}&_=${timestamp}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
-                    }
-                    return response.text();
-                })
-                .then(text => {
-                    try {
-                        const data = JSON.parse(text);
-                        if (data.success && data.game) {
-                            // Handle nested structure
-                            let staticData = data.game;
-                            let dynamicData = data.game;
-                            if (data.game .static && data.game.dynamic) {
-                                staticData = data.game.static;
-                                dynamicData = data.game.dynamic;
-                                // Merge static and dynamic data for caching
-                                data.game = { ...data.game.static, ...data.game.dynamic };
-                            }
-
-                            gameDataCache[gameId] = data.game;
-                            if (window.GameCache && typeof window.GameCache.setGameStatic === 'function') {
-                                window.GameCache.setGameStatic(gameId, staticData);
-                            }
-                            renderGameStatic(staticData);
-                            updateGameDynamic(dynamicData);
-                            UIUtils.showNotification('Game data loaded successfully!', 'success');
-                            return data.game;
-                        } else {
-                            throw new Error(data.error || 'Unknown error loading game data');
+            loadingNotification = UIUtils.showNotification('Loading game data...', 'info', 1000);
+            return fetch(`${window.baseUrl}/api.php?action=getGameDetails&id=${gameId}&_=${Date.now()}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.game) {
+                        const gameData = data.game.static && data.game.dynamic
+                            ? { ...data.game.static, ...data.game.dynamic }
+                            : data.game;
+                        gameDataCache[gameId] = gameData;
+                        if (window.GameCache && window.GameCache.saveGameStatic) {
+                            window.GameCache.saveGameStatic(gameId, gameData);
                         }
-                    } catch (e) {
-                        console.error('Error parsing game data:', e, text);
-                        throw new Error('Invalid response format');
+                        renderGameStatic(gameData);
+                        updateGameDynamic(gameData);
+                        UIUtils.hideNotification(loadingNotification);
+                        UIUtils.showNotification('Game data loaded successfully!', 'success', 1000);
+                        return gameData;
                     }
+                    throw new Error(data.error || 'Failed to load game data');
                 })
                 .catch(error => {
                     console.error('Error loading game details:', error);
-                    UIUtils.showNotification('Failed to load game details. Please try again later.', 'error');
+                    UIUtils.hideNotification(loadingNotification);
+                    UIUtils.showNotification('Failed to load game details.', 'error', 2000);
                     throw error;
                 });
         }
@@ -113,6 +75,7 @@
      * @param {Object} gameData - The game data object
      */
     function renderGameStatic(gameData) {
+        
         document.title = `${gameData.name} - Game Details - Game Rater '98`;
                 
         const titleElement = document.getElementById('game-title');
@@ -352,3 +315,11 @@
         updateGameMetaSection,
     };
 })();
+
+// Add this at the bottom of the file or in the document ready / window load event
+document.addEventListener('DOMContentLoaded', function() {
+    // After reviews are loaded
+    if (window.ReviewComments && window.ReviewComments.initializeComments) {
+        window.ReviewComments.initializeComments();
+    }
+});

@@ -82,9 +82,11 @@ const GameCache = {
     }
 };
 
+
 // Add to window object
 window.GameCache = GameCache;
 </script>
+<script src="js/batch-api.js"></script>
 
     <?php include 'header.php'; ?>
     <div class="game-page-container">

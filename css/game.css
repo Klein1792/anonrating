@@ -306,8 +306,9 @@ button[onclick^="deleteReview"]:hover {
     align-items: center;
 }
 
-.review-actions .helpful-btn,
-.review-actions .unhelpful-btn {
+.review-actions .helpful-btn, .edit-review-btn,
+.delete-review-btn,
+.review-actions .unhelpful-btn, .review-actions .report-review-btn {
     background-color: rgba(0, 0, 0, 0.5);
     border: 1px solid;
     border-radius: 3px;
@@ -327,7 +328,7 @@ button[onclick^="deleteReview"]:hover {
 
 .review-actions .helpful-btn {
     color: #b3b3b3;
-    border-color: #00ff00;
+    border-color: #7a867a;
     box-shadow: 0 0 3px rgba(0, 255, 0, 0.3);
 }
 
@@ -345,7 +346,7 @@ button[onclick^="deleteReview"]:hover {
 
 .review-actions .unhelpful-btn {
     color: #b3b3b3;
-    border-color: #ff0000;
+    border-color: #8f8282;
     box-shadow: 0 0 3px rgba(255, 0, 0, 0.3);
 }
 
@@ -361,27 +362,46 @@ button[onclick^="deleteReview"]:hover {
     box-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
 }
 
-.edit-review-btn,
-.delete-review-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    color: #00ffff; /* Cyan for Edit */
-    text-decoration: underline;
-    cursor: pointer;
-    transition: color 0.2s;
+/* Update report button styling to match helpful/unhelpful buttons */
+.review-actions .report-review-btn {
+    border-color:#808071;
+    color: #b3b3b3;
 }
 
+.review-actions .report-review-btn:hover {
+    background-color: rgba(255, 204, 0, 0.2);
+    color: #ffcc00;
+    box-shadow: 0 0 5px rgba(255, 204, 0, 0.7);
+}
+
+/* Enhanced styles for edit and delete buttons */
+.edit-review-btn,
 .delete-review-btn {
-    color: #a105a1; /* Magenta for Delete */
+    margin-left: 4px;
+}
+
+.edit-review-btn {
+    color: #b3b3b3;
+    border-color: #2e3f3f;
+    box-shadow: 0 0 3px rgba(67, 73, 73, 0.3);
 }
 
 .edit-review-btn:hover {
-    color: #00ff00; /* Green on hover */
+    background-color: rgba(0, 221, 221, 0.2);
+    color: #00dddd;
+    box-shadow: 0 0 5px rgba(0, 221, 221, 0.7);
+}
+
+.delete-review-btn {
+    color: #b3b3b3;
+    border-color: #584558;
+    box-shadow: 0 0 3px rgba(255, 85, 255, 0.3);
 }
 
 .delete-review-btn:hover {
-    color: #ff0000; /* Red on hover */
+    background-color: rgba(255, 85, 255, 0.2);
+    color: #eb3deb;
+    box-shadow: 0 0 5px rgba(255, 85, 255, 0.7);
 }
 
 /* Enhanced review styling */
@@ -855,7 +875,7 @@ button[id^="dislike-button"].active,
     margin-top: 20px;
     border-top: 1px solid #444;
     padding-top: 10px;
-    display: none;
+    display: flex;
 }
 
 #refresh-static {
@@ -892,26 +912,7 @@ button[id^="dislike-button"].active,
     margin-top: 5px;
 }
 
-/* Update report button styling to match helpful/unhelpful buttons */
-.review-actions .report-review-btn {
-    background-color: rgba(0, 0, 0, 0.5);
-    border: 1px solid #ffcc00;
-    border-radius: 3px;
-    font-size: 11px;
-    padding: 0 4px;
-    transition: all 0.2s;
-    cursor: pointer;
-    font-family: 'Courier New', Courier, monospace;
-    text-transform: uppercase;
-    color: #b3b3b3;
-    box-shadow: 0 0 3px rgba(255, 204, 0, 0.3);
-}
 
-.review-actions .report-review-btn:hover {
-    background-color: rgba(255, 204, 0, 0.2);
-    color: #ffcc00;
-    box-shadow: 0 0 5px rgba(255, 204, 0, 0.7);
-}
 
 /* Report modal styling */
 .report-modal {
@@ -1061,7 +1062,8 @@ button[id^="dislike-button"].active,
 .comment-actions {
     display: flex;
     gap: 8px;
-    justify-content: flex-end;
+    align-items: center;
+
 }
 
 .comment-actions button {
@@ -1108,7 +1110,7 @@ button[id^="dislike-button"].active,
 /* Updated Reply button styling to match Helpful/Unhelpful buttons */
 .reply-review-btn {
     background-color: rgba(0, 0, 0, 0.5);
-    border: 1px solid #00aaff;
+    border: 1px solid #828682;
     border-radius: 3px;
     font-size: 11px;
     padding: 0 4px;
@@ -1187,4 +1189,24 @@ button[id^="dislike-button"].active,
 .comments-content.collapsed {
     max-height: 0;
     opacity: 0;
+}
+
+/* Comment banned styling */
+.comment-banned {
+    background-color: rgba(255, 0, 0, 0.05); 
+    border-left: 3px solid #ff5555;
+}
+
+.banned-badge {
+    background-color: #ff5555;
+    color: white;
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 5px;
+}
+
+.banned-content {
+    color: #999;
+    font-style: italic;
 }

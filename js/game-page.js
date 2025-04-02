@@ -42,33 +42,65 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Initialize all components
-    if (window.GameDetails && window.GameDetails.loadGameDetails) {
-        window.GameDetails.loadGameDetails(gameId);
-    } else {
-        console.error("GameDetails module not available");
+    UIUtils.showNotification('Loading game...', 'info', 1000);
+
+    try {
+        const data = await BatchAPI.loadGamePage(gameId);
+        console.log("BatchAPI.loadGamePage response:", data);
+
+        if (data.error || !data.game) {
+            console.warn("Batch API error or no game data:", data.error);
+            // Fallback to individual loads
+            await window.GameDetails.loadGameDetails(gameId);
+            await window.Reviews.loadReviews(1, gameId);
+        } else {
+            // Game data should already be rendered by BatchAPI.loadGamePage
+            // Just handle reviews here
+            if (data.reviews && data.reviews.reviews) {
+                const reviewsList = document.getElementById('reviews-list');
+                if (reviewsList) {
+                    reviewsList.innerHTML = '';
+                    if (data.reviews.reviews.length === 0) {
+                        reviewsList.innerHTML = '<p>No reviews yet. Be the first to review this game!</p>';
+                    } else {
+                        data.reviews.reviews.forEach(review => {
+                            window.Reviews.renderReview(review, reviewsList);
+                        });
+                        if (window.Reviews.setupPagination && data.reviews.pagination) {
+                            window.Reviews.setupPagination(
+                                data.reviews.pagination.current_page,
+                                data.reviews.pagination.total_pages,
+                                gameId
+                            );
+                        }
+                        if (window.ReviewComments && window.ReviewComments.initializeComments) {
+                            window.ReviewComments.initializeComments();
+                        }
+                    }
+                }
+            }
+        }
+
+        if (window.Reviews && window.Reviews.setupReviewForm) {
+            window.Reviews.setupReviewForm(gameId);
+        }
+
+        if (window.ChallengeSystem) {
+            window.ChallengeSystem.setupChallengeSequence();
+        }
+
+        UIUtils.showNotification('Game loaded!', 'success', 1000);
+    } catch (error) {
+        console.error("Failed to load game:", error);
+        UIUtils.showNotification('Error loading game', 'error', 2000);
+        // Attempt individual loads as a last resort
+        await window.GameDetails.loadGameDetails(gameId);
+        await window.Reviews.loadReviews(1, gameId);
     }
 
-    if (window.Reviews && window.Reviews.loadReviews) {
-        window.Reviews.loadReviews(1, gameId);
-    } else {
-        console.error("Reviews module not available");
-    }
-
-    if (window.Reviews && window.Reviews.setupReviewForm) {
-        window.Reviews.setupReviewForm(gameId);
-    }
-
-    if (window.ChallengeSystem && window.ChallengeSystem.setupChallengeSequence) {
-        window.ChallengeSystem.setupChallengeSequence();
-    }
-
-    // Setup moderation UI elements if user is admin/moderator
     if (window.currentUser && (window.currentUser.is_admin || window.currentUser.is_moderator)) {
         setupModerationUI();
     }
-
-    console.log("Game page initialization complete");
 });
 
 // Setup UI elements for moderation

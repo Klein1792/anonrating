@@ -417,10 +417,12 @@ function submitEditedReview(reviewId, title, content, rating) {
         });
 }
 
-// Export functions to global scope
+// Export functions to global scope - KEEP ONLY THIS EXPORT
 window.ReviewActions = {
     editReview,
-    deleteReview
+    deleteReview,
+    showReportDialog,
+    showDeleteConfirmDialog
 };
     
     /**
@@ -574,6 +576,7 @@ window.ReviewActions = {
     window.ReviewActions = {
         editReview,
         deleteReview,
-        showReportDialog
+        showReportDialog,
+        showDeleteConfirmDialog
     };
 })();

@@ -22,8 +22,10 @@
      * Display a notification message
      * @param {string} message - The message to display
      * @param {string} type - The type/style of notification (info, success, error, warning)
+     * @param {number} duration - Duration in ms (0 to prevent auto-dismiss)
+     * @returns {Element} - The notification element
      */
-    function showNotification(message, type = 'info') {
+    function showNotification(message, type = 'info', duration = 5000) {
         let container = document.getElementById('notifications-container');
         if (!container) {
             container = document.createElement('div');
@@ -50,15 +52,32 @@
         // Trigger animation
         setTimeout(() => notification.classList.add('show'), 10);
         
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.classList.add('hiding');
-                setTimeout(() => {
-                    if (notification.parentNode) notification.remove();
-                }, 300);
-            }
-        }, 5000);
+        // Auto-hide after duration (if not 0)
+        if (duration > 0) {
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.classList.add('hiding');
+                    setTimeout(() => {
+                        if (notification.parentNode) notification.remove();
+                    }, 300);
+                }
+            }, duration);
+        }
+        
+        return notification;
+    }
+    
+    /**
+     * Hide a specific notification element
+     * @param {Element} notification - The notification element to hide
+     */
+    function hideNotification(notification) {
+        if (notification && notification.parentNode) {
+            notification.classList.add('hiding');
+            setTimeout(() => {
+                if (notification.parentNode) notification.remove();
+            }, 300);
+        }
     }
     
     /**
@@ -86,6 +105,7 @@
     window.UIUtils = {
         escapeHtml,
         showNotification,
+        hideNotification,
         formatDate
     };
 })();

@@ -2,7 +2,6 @@
  * Reviews Module
  * Handles loading, rendering and pagination of game reviews
  */
-
 (function() {
     'use strict';
     
@@ -54,7 +53,7 @@
                 
                 setupPagination(pagination.current_page, pagination.total_pages, gameId);
                 
-                // Add this line to initialize comments after reviews are loaded
+                // Initialize comments after reviews are loaded
                 if (window.ReviewComments && window.ReviewComments.initializeComments) {
                     window.ReviewComments.initializeComments();
                 }
@@ -62,7 +61,6 @@
             .catch(error => {
                 document.getElementById('reviews-list').innerHTML = `<p class="error">Error: ${error.message}</p>`;
             });
-            
     }
     
     /**
@@ -73,14 +71,13 @@
     function renderReview(review, container) {
         console.log("Review object:", review);
 
-        // Ensure currentUser is properly initialized
         const currentUser = window.currentUser || null;
         console.log("Current user:", currentUser);
 
         const reviewDiv = document.createElement('div');
         reviewDiv.className = 'review-item';
         reviewDiv.id = `review-${review.id}`;
-        // Add banned class if the user is banned
+
         if (review.is_banned) {
             reviewDiv.classList.add('review-banned');
         }
@@ -101,6 +98,9 @@
         const filledStars = '★'.repeat(review.rating);
         const emptyStars = '☆'.repeat(10 - review.rating);
         
+        // Use comment_count directly from the API response
+        const commentCount = review.comment_count || 0;
+        
         reviewDiv.innerHTML = `
             <div class="review-header">
                 <div class="review-author">
@@ -117,6 +117,9 @@
                 <div class="review-votes">
                     <span id="review-helpful-${review.id}">${review.helpful_votes} found this helpful</span> | 
                     <span id="review-unhelpful-${review.id}">${review.not_helpful_votes} found this unhelpful</span>
+                </div>
+                <div class="review-comments-count">
+                    <span>${commentCount} comment${commentCount !== 1 ? 's' : ''}</span>
                 </div>
             </div>
         `;
@@ -154,23 +157,20 @@
             actionsDiv.appendChild(deleteBtn);
         }
         
-        // Add ban user button for admins/moderators
         if (currentUser && (currentUser.is_admin || currentUser.is_moderator)) {
             const banUserBtn = document.createElement('button');
             banUserBtn.className = 'ban-user-btn';
             banUserBtn.textContent = review.is_banned ? 'Unban User' : 'Ban User';
             banUserBtn.onclick = () => ModerationActions.banUserFromReview(review);
-            actionsDiv.appendChild(banUserBtn); // This is correct - adding to actionsDiv
+            actionsDiv.appendChild(banUserBtn);
         }
         
-        // Report button for all users
         const reportBtn = document.createElement('button');
         reportBtn.className = 'report-review-btn';
         reportBtn.textContent = 'Report';
         reportBtn.onclick = () => ReviewActions.showReportDialog(review.id);
         actionsDiv.appendChild(reportBtn);
         
-        // Add Reply button after the existing buttons in actionsDiv
         const replyBtn = document.createElement('button');
         replyBtn.className = 'reply-review-btn';
         replyBtn.textContent = 'Reply';
@@ -179,14 +179,10 @@
         
         reviewDiv.appendChild(actionsDiv);
         
-        // Add a container for comments
         const commentsContainer = document.createElement('div');
         commentsContainer.className = 'review-comments';
         commentsContainer.id = `comments-${review.id}`;
         reviewDiv.appendChild(commentsContainer);
-        
-        // Load existing comments
-        ReviewComments.loadComments(review.id);
         
         container.appendChild(reviewDiv);
         

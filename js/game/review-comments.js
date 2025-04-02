@@ -304,17 +304,26 @@
             userBadge = '<span class="admin-badge">Admin</span>';
         } else if (comment.is_moderator) {
             userBadge = '<span class="mod-badge">Moderator</span>';
+        } else if (comment.is_banned) {
+            userBadge = '<span class="banned-badge">Banned</span>'; // Add the banned badge here
+        } else if (!comment.is_anonymous) {
+            userBadge = '<span class="user-badge">User</span>';
         }
+        
+        // Modify content display if user is banned
+        const contentDisplay = comment.is_banned ? 
+            '<div class="comment-content banned-content">[This comment was posted by a banned user]</div>' : 
+            `<div class="comment-content">${comment.content}</div>`;
         
         commentElement.innerHTML = `
             <div class="comment-header">
                 <span class="comment-author">${comment.display_name} ${userBadge}</span>
                 <span class="comment-date">${commentDate}</span>
             </div>
-            <div class="comment-content">${comment.content}</div>
+            ${contentDisplay}
         `;
         
-        // Add report button for comments
+        // Add comment actions
         const commentActions = document.createElement('div');
         commentActions.className = 'comment-actions';
         

@@ -54,20 +54,31 @@ if (isset($_SESSION['user_id'])) {
 <!-- Auth module -->
 <script src="js/auth-client.js"></script>
 
+
+
 <!-- Page-specific scripts loaded conditionally -->
 <?php if ($current_page === 'game.php'): ?>
+    <script src="js/game/ui-utils.js"></script>
+    <script src="js/batch-api.js"></script>
+    <script src="js/game/game-details.js"></script>
+    <script src="js/game/reviews.js"></script>
+    <script src="js/game/review-votes.js"></script>
+    <script src="js/game/review-actions.js"></script>
+    <script src="js/game/review-comments.js"></script>
     <script src="js/game/auth-utils.js"></script>
-<script src="js/game/ui-utils.js"></script>
-<script src="js/game/game-details.js"></script>
-<script src="js/game/reviews.js"></script>
-<script src="js/game/review-votes.js"></script>
-<script src="js/game/review-actions.js"></script>
-<script src="js/game/review-comments.js"></script> 
-<script src="js/game/moderation-actions.js"></script>
-<script src="js/game/challenge-system.js"></script>
-<script src="js/game/game-votes.js"></script> <!-- Add this line -->
-<script src="js/game-page.js"></script>
+    <script src="js/game/moderation-actions.js"></script>
+    <script src="js/game/challenge-system.js"></script>
+    <script src="js/game/game-votes.js"></script>
+    <script src="js/game-page.js"></script>
 <?php endif; ?>
+
+<!-- user dashboard -->
+<?php if ($current_page === 'user_dashboard.php'): ?>
+    <link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/user_dashboard.css">
+
+<?php endif; ?>
+
     <!-- Any page-specific head content -->
     <?php if (isset($head_content)) echo $head_content; ?>
 </head>
@@ -84,6 +95,7 @@ if (isset($_SESSION['user_id'])) {
                     <p id="status">
                     <?php if (isset($_SESSION['user_id'])): ?>
                         Logged in as: <?php echo $username; ?>
+                        | <a href="user_dashboard.php">Dashboard</a>
                         <?php if ($is_admin): ?>
                             | <a href="admin.php">Admin Dashboard</a>
                         <?php endif; ?>

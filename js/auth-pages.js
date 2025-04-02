@@ -3,17 +3,16 @@
  * Handles Konami code and arrow challenge sequences for login/register pages
  */
 (function() {
-    // Set up global namespace
     window.gameRating = window.gameRating || {};
     window.gameRating.auth = {};
     
-    // Utility functions
     window.gameRating.utils = {
-        showNotification: function(message) {
+        showNotification: function(message, type = 'error') {
             const notification = document.getElementById('custom-notification');
             const messageElement = document.getElementById('notification-message');
             if (notification && messageElement) {
                 messageElement.textContent = message;
+                notification.className = `custom-notification ${type}`; // Add type for styling
                 notification.style.display = 'block';
                 setTimeout(() => {
                     notification.style.display = 'none';
@@ -22,73 +21,62 @@
                 alert(message);
             }
         },
-        
         isBotDetected: function(pressTimes, sequenceLength) {
             if (pressTimes.length < sequenceLength) return false;
-
             const timeDiffs = [];
             for (let i = 1; i < pressTimes.length; i++) {
                 timeDiffs.push(pressTimes[i] - pressTimes[i - 1]);
             }
-
             const avgTimeDiff = timeDiffs.reduce((sum, diff) => sum + diff, 0) / timeDiffs.length;
             const variance = timeDiffs.reduce((sum, diff) => sum + Math.pow(diff - avgTimeDiff, 2), 0) / timeDiffs.length;
             const stdDev = Math.sqrt(variance);
-
             return avgTimeDiff < 30 || stdDev < 10;
         }
     };
     
-    // Constants
-    const KEY_SYMBOLS = {
-        37: '←', 38: '↑', 39: '→', 40: '↓', 65: 'A', 66: 'B'
-    };
+    const KEY_SYMBOLS = { 37: '←', 38: '↑', 39: '→', 40: '↓', 65: 'A', 66: 'B' };
+    const KONAMI_SIGNUP = [38, 38, 40, 40, 37, 39, 37, 39, 65, 66];
+    const KONAMI_LOGIN = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65];
     
-    const KONAMI_SIGNUP = [38, 38, 40, 40, 37, 39, 37, 39, 65, 66]; // ↑↑↓↓←→←→AB
-    const KONAMI_LOGIN = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65]; // ↑↑↓↓←→←→BA
-    
-    // Auth page challenge handler
     window.gameRating.auth = {
-        // Challenge variables
         challengeSequence: [],
         challengeUserInput: [],
         challengePressTimes: [],
-        
-        // Konami variables
         konamiInput: [],
         konamiTimes: [],
-        
-        // Current page info
         currentPage: '',
         submitBtnId: '',
         konamiSequenceId: '',
         konamiCode: [],
         konamiRedirect: '',
         
-        // Initialize the auth challenges
         init: function(page) {
             this.currentPage = page;
+            this.submitBtnId = page === 'login' ? 'submit-login-btn' : 'submit-register-btn';
+            this.konamiSequenceId = page === 'login' ? 'konami-sequence-signup-login' : 'konami-sequence-login-reg';
+            this.konamiCode = page === 'login' ? KONAMI_SIGNUP : KONAMI_LOGIN;
+            this.konamiRedirect = page === 'login' ? 'register.php' : 'login.php';
             
-            if (page === 'login') {
-                this.submitBtnId = 'submit-login-btn';
-                this.konamiSequenceId = 'konami-sequence-signup-login';
-                this.konamiCode = KONAMI_SIGNUP;
-                this.konamiRedirect = 'register.php';
-            } else {
-                this.submitBtnId = 'submit-register-btn';
-                this.konamiSequenceId = 'konami-sequence-login-reg';
-                this.konamiCode = KONAMI_LOGIN;
-                this.konamiRedirect = 'login.php';
-            }
-            
-            // Set up Konami code display
             this.setupKonamiDisplay();
-            
-            // Generate symbol challenge
             this.generateSymbolChallenge();
-            
-            // Set up event listener
             document.addEventListener('keydown', this.handleKeydown.bind(this));
+            
+            // Add password validation on input
+            const passwordInput = document.getElementById('password');
+            if (passwordInput) {
+                passwordInput.addEventListener('input', this.validatePassword.bind(this));
+            }
+        },
+        
+        validatePassword: function(e) {
+            const password = e.target.value;
+            const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+            if (!regex.test(password)) {
+                window.gameRating.utils.showNotification(
+                    'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.',
+                    'error'
+                );
+            }
         },
         
         // Set up Konami code display
